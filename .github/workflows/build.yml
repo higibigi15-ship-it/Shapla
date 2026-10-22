@@ -1,0 +1,610 @@
+name: Build Shapla APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: চেকআউট রিপোজিটরি
+        uses: actions/checkout@v4
+
+      - name: জাভা (JDK 17) সেটআপ
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: গ্র্যাডল সেটআপ
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+
+      - name: অ্যান্ড্রয়েড প্রজেক্টের ফাইলসমূহ তৈরি করা হচ্ছে
+        run: |
+          mkdir -p app/src/main/java/com/shapla/app
+
+          # settings.gradle.kts
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Shapla"
+          include(":app")
+          EOF
+
+          # build.gradle.kts
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.2.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+          }
+          EOF
+
+          # app/build.gradle.kts
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.shapla.app"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.shapla.app"
+                  minSdk = 24
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "1.0.0"
+
+                  vectorDrawables {
+                      useSupportLibrary = true
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              buildFeatures {
+                  compose = true
+              }
+              composeOptions {
+                  kotlinCompilerExtensionVersion = "1.5.8"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+              implementation("androidx.activity:activity-compose:1.8.2")
+              implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+          }
+          EOF
+
+          # AndroidManifest.xml
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="শাপলা"
+                  android:roundIcon="@android:drawable/sym_def_app_icon"
+                  android:supportsRtl="true"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # MainActivity.kt
+          cat << 'EOF' > app/src/main/java/com/shapla/app/MainActivity.kt
+          package com.shapla.app
+
+          import android.content.Context
+          import android.net.Uri
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.rememberLauncherForActivityResult
+          import androidx.activity.compose.setContent
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.*
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.vector.ImageVector
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.ui.text.input.PasswordVisualTransformation
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import java.security.MessageDigest
+
+          val BrandGreen = Color(0xFF0B4636)
+          val BrandLeaf = Color(0xFF10B981)
+
+          fun hashPwd(password: String): String {
+              val digest = MessageDigest.getInstance("SHA-256")
+              val bytes = digest.digest(password.toByteArray(Charsets.UTF_8))
+              return bytes.joinToString("") { "%02x".format(it) }
+          }
+
+          data class RecordItem(val title: String, val idNumber: String, val fileCount: Int)
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val prefs = getSharedPreferences("shapla_users", Context.MODE_PRIVATE)
+
+                  setContent {
+                      var currentScreen by remember { mutableStateOf("login") }
+                      var currentLoggedInUser by remember { mutableStateOf("") }
+
+                      when (currentScreen) {
+                          "login" -> LoginScreen(
+                              prefs = prefs,
+                              onNavigateToRegister = { currentScreen = "register" },
+                              onLoginSuccess = { user ->
+                                  currentLoggedInUser = user
+                                  currentScreen = "vault"
+                              }
+                          )
+                          "register" -> RegisterScreen(
+                              prefs = prefs,
+                              onNavigateToLogin = { currentScreen = "login" },
+                              onRegisterSuccess = { user ->
+                                  currentLoggedInUser = user
+                                  currentScreen = "vault"
+                              }
+                          )
+                          "vault" -> SecureVaultScreen(
+                              userName = currentLoggedInUser,
+                              onLogout = {
+                                  currentLoggedInUser = ""
+                                  currentScreen = "login"
+                              }
+                          )
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun LoginScreen(
+              prefs: android.content.SharedPreferences,
+              onNavigateToRegister: () -> Unit,
+              onLoginSuccess: (String) -> Unit
+          ) {
+              var identifier by remember { mutableStateOf("") }
+              var password by remember { mutableStateOf("") }
+              var errorMsg by remember { mutableStateOf<String?>(null) }
+
+              Column(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .background(Color(0xFFF8FAFC))
+                      .padding(24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+              ) {
+                  Text("শাপলা (Shapla)", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = BrandGreen)
+                  Text("কাজ, সেবা, সব একসাথে।", fontSize = 14.sp, color = BrandLeaf, fontWeight = FontWeight.Medium)
+                  Text("Designed & Owned by Mohammad Israfil Hossain", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(top = 4.dp))
+                  Text("Made by Israfil Hossain", fontSize = 11.sp, color = Color.LightGray)
+
+                  Spacer(modifier = Modifier.height(28.dp))
+
+                  if (errorMsg != null) {
+                      Card(
+                          colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                          modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                      ) {
+                          Text(errorMsg!!, color = Color(0xFFC62828), fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+                      }
+                  }
+
+                  OutlinedTextField(
+                      value = identifier,
+                      onValueChange = { identifier = it.trim() },
+                      label = { Text("মোবাইল নাম্বার বা ইউজারনেম") },
+                      leadingIcon = { Icon(Icons.Default.PhoneAndroid, null) },
+                      modifier = Modifier.fillMaxWidth(),
+                      singleLine = true
+                  )
+
+                  Spacer(modifier = Modifier.height(12.dp))
+
+                  OutlinedTextField(
+                      value = password,
+                      onValueChange = { password = it },
+                      label = { Text("গোপন পাসওয়ার্ড") },
+                      leadingIcon = { Icon(Icons.Default.Lock, null) },
+                      visualTransformation = PasswordVisualTransformation(),
+                      modifier = Modifier.fillMaxWidth(),
+                      singleLine = true
+                  )
+
+                  Spacer(modifier = Modifier.height(20.dp))
+
+                  Button(
+                      onClick = {
+                          if (identifier.isBlank() || password.isBlank()) {
+                              errorMsg = "সব তথ্য সঠিকভাবে দিন।"
+                          } else {
+                              val savedHash = prefs.getString("pwd_$identifier", null)
+                              if (savedHash == null) {
+                                  errorMsg = "এই মোবাইল নাম্বারে কোনো অ্যাকাউন্ট নেই!"
+                              } else {
+                                  val inputHash = hashPwd(password)
+                                  if (inputHash != savedHash) {
+                                      errorMsg = "ভুল পাসওয়ার্ড! সঠিক পাসওয়ার্ড দিন।"
+                                  } else {
+                                      errorMsg = null
+                                      onLoginSuccess(identifier)
+                                  }
+                              }
+                          }
+                      },
+                      modifier = Modifier.fillMaxWidth().height(50.dp),
+                      colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+                  ) {
+                      Text("লগইন করুন (Log In)", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                  }
+
+                  Spacer(modifier = Modifier.height(16.dp))
+
+                  TextButton(onClick = onNavigateToRegister) {
+                      Text("নতুন অ্যাকাউন্ট খুলুন (Register)", color = BrandLeaf, fontWeight = FontWeight.Bold)
+                  }
+              }
+          }
+
+          @Composable
+          fun RegisterScreen(
+              prefs: android.content.SharedPreferences,
+              onNavigateToLogin: () -> Unit,
+              onRegisterSuccess: (String) -> Unit
+          ) {
+              var name by remember { mutableStateOf("") }
+              var phone by remember { mutableStateOf("") }
+              var password by remember { mutableStateOf("") }
+              var confirmPwd by remember { mutableStateOf("") }
+              var errorMsg by remember { mutableStateOf<String?>(null) }
+
+              Column(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .background(Color(0xFFF8FAFC))
+                      .verticalScroll(rememberScrollState())
+                      .padding(24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally
+              ) {
+                  Spacer(modifier = Modifier.height(16.dp))
+                  Text("শাপলা (Shapla)", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = BrandGreen)
+                  Text("নতুন আইডি তৈরি করুন", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                  Text("Made by Israfil Hossain", fontSize = 11.sp, color = Color.Gray)
+
+                  Spacer(modifier = Modifier.height(20.dp))
+
+                  if (errorMsg != null) {
+                      Card(
+                          colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE)),
+                          modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                      ) {
+                          Text(errorMsg!!, color = Color(0xFFC62828), fontSize = 13.sp, modifier = Modifier.padding(12.dp))
+                      }
+                  }
+
+                  OutlinedTextField(
+                      value = name,
+                      onValueChange = { name = it },
+                      label = { Text("পুরো নাম (Full Name)") },
+                      modifier = Modifier.fillMaxWidth(),
+                      singleLine = true
+                  )
+
+                  Spacer(modifier = Modifier.height(10.dp))
+
+                  OutlinedTextField(
+                      value = phone,
+                      onValueChange = { phone = it.filter { c -> c.isDigit() } },
+                      label = { Text("মোবাইল নাম্বার (ইউনিক হতে হবে)") },
+                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                      modifier = Modifier.fillMaxWidth(),
+                      singleLine = true
+                  )
+
+                  Spacer(modifier = Modifier.height(10.dp))
+
+                  OutlinedTextField(
+                      value = password,
+                      onValueChange = { password = it },
+                      label = { Text("পাসওয়ার্ড (কমপক্ষে ৬ সংখ্যার)") },
+                      visualTransformation = PasswordVisualTransformation(),
+                      modifier = Modifier.fillMaxWidth(),
+                      singleLine = true
+                  )
+
+                  Spacer(modifier = Modifier.height(10.dp))
+
+                  OutlinedTextField(
+                      value = confirmPwd,
+                      onValueChange = { confirmPwd = it },
+                      label = { Text("পাসওয়ার্ড নিশ্চিত করুন") },
+                      visualTransformation = PasswordVisualTransformation(),
+                      modifier = Modifier.fillMaxWidth(),
+                      singleLine = true
+                  )
+
+                  Spacer(modifier = Modifier.height(20.dp))
+
+                  Button(
+                      onClick = {
+                          if (name.isBlank() || phone.isBlank() || password.isBlank()) {
+                              errorMsg = "সবগুলো ঘর পূরণ করুন।"
+                          } else if (password.length < 6) {
+                              errorMsg = "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।"
+                          } else if (password != confirmPwd) {
+                              errorMsg = "উভয় পাসওয়ার্ড একই হতে হবে।"
+                          } else if (prefs.contains("pwd_$phone")) {
+                              errorMsg = "এই নাম্বারে ইতিমধ্যে আইডি খোলা আছে!"
+                          } else {
+                              prefs.edit()
+                                  .putString("pwd_$phone", hashPwd(password))
+                                  .putString("name_$phone", name)
+                                  .apply()
+                              errorMsg = null
+                              onRegisterSuccess(phone)
+                          }
+                      },
+                      modifier = Modifier.fillMaxWidth().height(50.dp),
+                      colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+                  ) {
+                      Text("নিবন্ধন সম্পন্ন করুন (Sign Up)", fontWeight = FontWeight.Bold)
+                  }
+
+                  Spacer(modifier = Modifier.height(12.dp))
+
+                  TextButton(onClick = onNavigateToLogin) {
+                      Text("লগইন পেজে যান", color = BrandGreen)
+                  }
+              }
+          }
+
+          enum class VaultCat(val titleBn: String, val icon: ImageVector) {
+              NID("জাতীয় পরিচয়পত্র (NID)", Icons.Default.Badge),
+              PASSPORT("পাসপোর্ট ও ভিসা", Icons.Default.FlightTakeoff),
+              LAND("জমি ও সম্পত্তির দলিল", Icons.Default.HomeWork),
+              VEHICLE("গাড়ির কাগজপত্র", Icons.Default.DirectionsCar),
+              BANK("ব্যাংক ও আর্থিক নথি", Icons.Default.AccountBalance),
+              CONTACTS("জরুরি যোগাযোগ", Icons.Default.Contacts),
+              NOTES("নোট ও রিমাইন্ডার", Icons.Default.EditNote)
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun SecureVaultScreen(userName: String, onLogout: () -> Unit) {
+              var selectedCat by remember { mutableStateOf<VaultCat?>(null) }
+              val records = remember { mutableStateListOf<RecordItem>() }
+              var showAddDialog by remember { mutableStateOf(false) }
+
+              Scaffold(
+                  topBar = {
+                      TopAppBar(
+                          title = {
+                              Column {
+                                  Text(
+                                      text = if (selectedCat == null) "Secure Vault (নিরাপদ ভল্ট)" else selectedCat!!.titleBn,
+                                      fontWeight = FontWeight.Bold,
+                                      color = Color.White
+                                  )
+                                  Text("Designed & Owned by Mohammad Israfil Hossain", fontSize = 10.sp, color = Color(0xFFCBD5E1))
+                              }
+                          },
+                          navigationIcon = {
+                              if (selectedCat != null) {
+                                  IconButton(onClick = { selectedCat = null }) {
+                                      Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                  }
+                              }
+                          },
+                          actions = {
+                              IconButton(onClick = onLogout) {
+                                  Icon(Icons.Default.Logout, contentDescription = "Logout", tint = Color.White)
+                              }
+                          },
+                          colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandGreen)
+                      )
+                  },
+                  floatingActionButton = {
+                      if (selectedCat != null) {
+                          ExtendedFloatingActionButton(
+                              onClick = { showAddDialog = true },
+                              containerColor = BrandLeaf,
+                              contentColor = Color.White,
+                              icon = { Icon(Icons.Default.Add, null) },
+                              text = { Text("+ নথিপত্র যোগ করুন (Add)") }
+                          )
+                      }
+                  }
+              ) { p ->
+                  Box(modifier = Modifier.fillMaxSize().padding(p).background(Color(0xFFF8FAFC))) {
+                      if (selectedCat == null) {
+                          LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                              items(VaultCat.values()) { cat ->
+                                  Card(
+                                      modifier = Modifier.fillMaxWidth().clickable { selectedCat = cat },
+                                      shape = RoundedCornerShape(10.dp),
+                                      colors = CardDefaults.cardColors(containerColor = Color.White)
+                                  ) {
+                                      Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                          Icon(cat.icon, null, tint = BrandGreen, modifier = Modifier.size(36.dp))
+                                          Spacer(modifier = Modifier.width(16.dp))
+                                          Text(cat.titleBn, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                                          Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray)
+                                      }
+                                  }
+                              }
+                          }
+                      } else {
+                          if (records.isEmpty()) {
+                              Column(
+                                  modifier = Modifier.fillMaxSize().padding(32.dp),
+                                  horizontalAlignment = Alignment.CenterHorizontally,
+                                  verticalArrangement = Arrangement.Center
+                              ) {
+                                  Icon(selectedCat!!.icon, null, modifier = Modifier.size(64.dp), tint = Color.LightGray)
+                                  Spacer(modifier = Modifier.height(16.dp))
+                                  Text("কোনো নথি যোগ করা হয়নি", fontWeight = FontWeight.Bold, color = Color.Gray)
+                                  Spacer(modifier = Modifier.height(16.dp))
+                                  Button(
+                                      onClick = { showAddDialog = true },
+                                      colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+                                  ) {
+                                      Icon(Icons.Default.Add, null)
+                                      Spacer(modifier = Modifier.width(6.dp))
+                                      Text("+ Add Document")
+                                  }
+                              }
+                          } else {
+                              LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                  items(records) { item ->
+                                      Card(
+                                          modifier = Modifier.fillMaxWidth(),
+                                          shape = RoundedCornerShape(10.dp),
+                                          colors = CardDefaults.cardColors(containerColor = Color.White)
+                                      ) {
+                                          Column(modifier = Modifier.padding(14.dp)) {
+                                              Text(item.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                              if (item.idNumber.isNotBlank()) {
+                                                  Text("নম্বর: ${item.idNumber}", fontSize = 13.sp, color = Color.DarkGray)
+                                              }
+                                              Text("সংযুক্ত ফাইল: ${item.fileCount} টি", fontSize = 12.sp, color = BrandLeaf, fontWeight = FontWeight.Medium)
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+
+                      if (showAddDialog) {
+                          var docTitle by remember { mutableStateOf("") }
+                          var docNum by remember { mutableStateOf("") }
+                          val files = remember { mutableStateListOf<Uri>() }
+                          val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+                              files.addAll(uris)
+                          }
+
+                          AlertDialog(
+                              onDismissRequest = { showAddDialog = false },
+                              title = { Text("${selectedCat!!.titleBn}-এ নথি যোগ") },
+                              text = {
+                                  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                      OutlinedTextField(
+                                          value = docTitle,
+                                          onValueChange = { docTitle = it },
+                                          label = { Text("নথির শিরোনাম/নাম") },
+                                          modifier = Modifier.fillMaxWidth()
+                                      )
+                                      OutlinedTextField(
+                                          value = docNum,
+                                          onValueChange = { docNum = it },
+                                          label = { Text("ডকুমেন্ট/আইডি নম্বর") },
+                                          modifier = Modifier.fillMaxWidth()
+                                      )
+                                      Button(
+                                          onClick = { picker.launch("*/*") },
+                                          colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                                          modifier = Modifier.fillMaxWidth()
+                                      ) {
+                                          Icon(Icons.Default.AttachFile, null)
+                                          Spacer(modifier = Modifier.width(6.dp))
+                                          Text("ফাইল/ছবি সিলেক্ট করুন (${files.size})")
+                                      }
+                                  }
+                              },
+                              confirmButton = {
+                                  Button(
+                                      onClick = {
+                                          if (docTitle.isNotBlank()) {
+                                              records.add(RecordItem(docTitle, docNum, files.size))
+                                              showAddDialog = false
+                                          }
+                                      },
+                                      colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+                                  ) {
+                                      Text("সংরক্ষণ করুন (Save)")
+                                  }
+                              },
+                              dismissButton = {
+                                  TextButton(onClick = { showAddDialog = false }) {
+                                      Text("বাতিল")
+                                  }
+                              }
+                          )
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Shapla APK বিল্ড করা হচ্ছে
+        run: gradle assembleDebug
+
+      - name: তৈরি হওয়া APK সংরক্ষণ ও ডাউনলোড লিঙ্ক প্রস্তুত
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shapla-App-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
