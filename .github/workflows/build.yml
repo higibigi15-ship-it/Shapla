@@ -432,9 +432,9 @@ jobs:
 
           enum class VaultCat(val titleBn: String, val icon: ImageVector) {
               NID("জাতীয় পরিচয়পত্র (NID)", Icons.Default.Person),
-              PASSPORT("পাসপোর্ট ও ভিসা", Icons.Default.Description),
+              PASSPORT("পাসপোর্ট ও ভিসা", Icons.Default.Star),
               LAND("জমি ও সম্পত্তির দলিল", Icons.Default.Home),
-              VEHICLE("গাড়ির কাগজপত্র", Icons.Default.Description),
+              VEHICLE("গাড়ির কাগজপত্র", Icons.Default.Info),
               BANK("ব্যাংক ও আর্থিক নথি", Icons.Default.Lock),
               CONTACTS("জরুরি যোগাযোগ", Icons.Default.Phone),
               NOTES("নোট ও রিমাইন্ডার", Icons.Default.Edit)
@@ -500,7 +500,7 @@ jobs:
                                           Icon(cat.icon, null, tint = BrandGreen, modifier = Modifier.size(36.dp))
                                           Spacer(modifier = Modifier.width(16.dp))
                                           Text(cat.titleBn, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                          Icon(Icons.Default.ArrowForward, null, tint = Color.LightGray)
+                                          Text("›", fontSize = 22.sp, color = Color.LightGray)
                                       }
                                   }
                               }
