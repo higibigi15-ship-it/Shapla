@@ -23,10 +23,18 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
+          cache-disabled: true
 
       - name: অ্যান্ড্রয়েড প্রজেক্টের ফাইলসমূহ তৈরি করা হচ্ছে
         run: |
           mkdir -p app/src/main/java/com/shapla/app
+
+          # gradle.properties
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
 
           # settings.gradle.kts
           cat << 'EOF' > settings.gradle.kts
@@ -108,7 +116,6 @@ jobs:
               implementation("androidx.compose.ui:ui-graphics")
               implementation("androidx.compose.ui:ui-tooling-preview")
               implementation("androidx.compose.material3:material3")
-              implementation("androidx.compose.material:material-icons-extended")
           }
           EOF
 
@@ -259,7 +266,7 @@ jobs:
                       value = identifier,
                       onValueChange = { identifier = it.trim() },
                       label = { Text("মোবাইল নাম্বার বা ইউজারনেম") },
-                      leadingIcon = { Icon(Icons.Default.PhoneAndroid, null) },
+                      leadingIcon = { Icon(Icons.Default.Phone, null) },
                       modifier = Modifier.fillMaxWidth(),
                       singleLine = true
                   )
@@ -424,13 +431,13 @@ jobs:
           }
 
           enum class VaultCat(val titleBn: String, val icon: ImageVector) {
-              NID("জাতীয় পরিচয়পত্র (NID)", Icons.Default.Badge),
-              PASSPORT("পাসপোর্ট ও ভিসা", Icons.Default.FlightTakeoff),
-              LAND("জমি ও সম্পত্তির দলিল", Icons.Default.HomeWork),
-              VEHICLE("গাড়ির কাগজপত্র", Icons.Default.DirectionsCar),
-              BANK("ব্যাংক ও আর্থিক নথি", Icons.Default.AccountBalance),
-              CONTACTS("জরুরি যোগাযোগ", Icons.Default.Contacts),
-              NOTES("নোট ও রিমাইন্ডার", Icons.Default.EditNote)
+              NID("জাতীয় পরিচয়পত্র (NID)", Icons.Default.Person),
+              PASSPORT("পাসপোর্ট ও ভিসা", Icons.Default.Description),
+              LAND("জমি ও সম্পত্তির দলিল", Icons.Default.Home),
+              VEHICLE("গাড়ির কাগজপত্র", Icons.Default.Description),
+              BANK("ব্যাংক ও আর্থিক নথি", Icons.Default.Lock),
+              CONTACTS("জরুরি যোগাযোগ", Icons.Default.Phone),
+              NOTES("নোট ও রিমাইন্ডার", Icons.Default.Edit)
           }
 
           @OptIn(ExperimentalMaterial3Api::class)
@@ -462,7 +469,7 @@ jobs:
                           },
                           actions = {
                               IconButton(onClick = onLogout) {
-                                  Icon(Icons.Default.Logout, contentDescription = "Logout", tint = Color.White)
+                                  Icon(Icons.Default.ExitToApp, contentDescription = "Logout", tint = Color.White)
                               }
                           },
                           colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandGreen)
@@ -493,7 +500,7 @@ jobs:
                                           Icon(cat.icon, null, tint = BrandGreen, modifier = Modifier.size(36.dp))
                                           Spacer(modifier = Modifier.width(16.dp))
                                           Text(cat.titleBn, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                          Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray)
+                                          Icon(Icons.Default.ArrowForward, null, tint = Color.LightGray)
                                       }
                                   }
                               }
@@ -569,7 +576,7 @@ jobs:
                                           colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
                                           modifier = Modifier.fillMaxWidth()
                                       ) {
-                                          Icon(Icons.Default.AttachFile, null)
+                                          Icon(Icons.Default.Add, null)
                                           Spacer(modifier = Modifier.width(6.dp))
                                           Text("ফাইল/ছবি সিলেক্ট করুন (${files.size})")
                                       }
@@ -601,7 +608,7 @@ jobs:
           EOF
 
       - name: Shapla APK বিল্ড করা হচ্ছে
-        run: gradle assembleDebug
+        run: gradle assembleDebug --stacktrace
 
       - name: তৈরি হওয়া APK সংরক্ষণ ও ডাউনলোড লিঙ্ক প্রস্তুত
         uses: actions/upload-artifact@v4
