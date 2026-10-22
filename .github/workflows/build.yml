@@ -1,42 +1,27 @@
 
-name: Build Shapla APK
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
-permissions:
-  contents: read
+    <application
+        android:allowBackup="true"
+        android:label="শাপলা"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
-jobs:
-  build:
-    name: Build Android APK
-    runs-on: ubuntu-latest
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
 
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
+        </activity>
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+    </application>
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.5
-
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Upload Shapla APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Shapla-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+</manifest>
