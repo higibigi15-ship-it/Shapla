@@ -79,8 +79,8 @@ jobs:
                   applicationId = "com.shapla.app"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 1
-                  versionName = "1.0.0"
+                  versionCode = 5
+                  versionName = "1.1.0"
 
                   vectorDrawables {
                       useSupportLibrary = true
@@ -124,6 +124,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
               <application
                   android:allowBackup="true"
@@ -148,19 +150,34 @@ jobs:
           cat << 'EOF' > app/src/main/java/com/shapla/app/MainActivity.kt
           package com.shapla.app
 
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
           import android.content.Context
+          import android.graphics.Bitmap
+          import android.graphics.BitmapFactory
+          import android.graphics.Matrix
+          import android.media.AudioAttributes
+          import android.media.Ringtone
+          import android.media.RingtoneManager
           import android.net.Uri
+          import android.os.Build
           import android.os.Bundle
+          import android.os.CountDownTimer
+          import android.os.VibrationEffect
+          import android.os.Vibrator
           import androidx.activity.ComponentActivity
           import androidx.activity.compose.rememberLauncherForActivityResult
           import androidx.activity.compose.setContent
           import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.Image
           import androidx.compose.foundation.background
+          import androidx.compose.foundation.border
           import androidx.compose.foundation.clickable
           import androidx.compose.foundation.layout.*
           import androidx.compose.foundation.lazy.LazyColumn
           import androidx.compose.foundation.lazy.items
           import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.shape.CircleShape
           import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.foundation.text.KeyboardOptions
           import androidx.compose.foundation.verticalScroll
@@ -170,17 +187,144 @@ jobs:
           import androidx.compose.runtime.*
           import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.draw.shadow
           import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.asImageBitmap
           import androidx.compose.ui.graphics.vector.ImageVector
+          import androidx.compose.ui.layout.ContentScale
+          import androidx.compose.ui.platform.LocalContext
           import androidx.compose.ui.text.font.FontWeight
           import androidx.compose.ui.text.input.KeyboardType
           import androidx.compose.ui.text.input.PasswordVisualTransformation
           import androidx.compose.ui.unit.dp
           import androidx.compose.ui.unit.sp
+          import androidx.compose.ui.window.Dialog
+          import androidx.compose.ui.window.DialogProperties
+          import androidx.core.app.NotificationCompat
+          import org.json.JSONArray
+          import org.json.JSONObject
+          import java.io.File
+          import java.io.FileOutputStream
           import java.security.MessageDigest
 
           val BrandGreen = Color(0xFF0B4636)
           val BrandLeaf = Color(0xFF10B981)
+          val DarkBg = Color(0xFF071B16)
+          val OrangeCall = Color(0xFFEA580C)
+
+          // ১. নোটিফিকেশন ও পিং/কল সাউন্ড হেল্পার
+          object NotificationService {
+              private const val CHANNEL_MSG = "shapla_messages"
+              private const val CHANNEL_CALL = "shapla_calls"
+              var activeRingtone: Ringtone? = null
+              var callTimer: CountDownTimer? = null
+
+              fun initChannels(context: Context) {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+                      // মেসেজের জন্য পিং চ্যানেল
+                      val msgChannel = NotificationChannel(
+                          CHANNEL_MSG,
+                          "মেসেজ নোটিফিকেশন",
+                          NotificationManager.IMPORTANCE_HIGH
+                      ).apply {
+                          description = "শাপলা মেসেজের জন্য পিং শব্দ"
+                          enableVibration(true)
+                      }
+
+                      // কলের জন্য চ্যানেল
+                      val callChannel = NotificationChannel(
+                          CHANNEL_CALL,
+                          "ইনকামিং কল নোটিফিকেশন",
+                          NotificationManager.IMPORTANCE_HIGH
+                      ).apply {
+                          description = "শাপলা অডিও ও ভিডিও কল"
+                          setSound(
+                              RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                              AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE).build()
+                          )
+                          enableVibration(true)
+                      }
+
+                      nm.createNotificationChannel(msgChannel)
+                      nm.createNotificationChannel(callChannel)
+                  }
+              }
+
+              // মেসেজ আসলে "পিং" শব্দ বাজানো ও নোটিফিকেশন দেওয়া
+              fun triggerMessagePing(context: Context, sender: String, text: String) {
+                  val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                  val ringtone = RingtoneManager.getRingtone(context, soundUri)
+                  ringtone?.play()
+
+                  val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+                  } else {
+                      vibrator?.vibrate(150)
+                  }
+
+                  val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                  val notif = NotificationCompat.Builder(context, CHANNEL_MSG)
+                      .setSmallIcon(android.R.drawable.stat_notify_chat)
+                      .setContentTitle("শাপলা বার্তা: $sender")
+                      .setContentText(text)
+                      .setPriority(NotificationCompat.PRIORITY_HIGH)
+                      .setAutoCancel(true)
+                      .build()
+                  nm.notify(System.currentTimeMillis().toInt(), notif)
+              }
+
+              // কল আসলে অবিরাম পিংপিং রিংটোন বাজবে প্রায় ৪০ সেকেন্ড
+              fun startIncomingCallRingtone(context: Context, onTimeout: () -> Unit) {
+                  stopCallRingtone()
+                  try {
+                      val callUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                      activeRingtone = RingtoneManager.getRingtone(context, callUri)
+                      activeRingtone?.play()
+
+                      val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                      val pattern = longArrayOf(0, 1000, 1000)
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
+                      } else {
+                          vibrator?.vibrate(pattern, 0)
+                      }
+
+                      // ঠিক ৪০ সেকেন্ড টাইমার
+                      callTimer = object : CountDownTimer(40000, 1000) {
+                          override fun onTick(millisUntilFinished: Long) {
+                              if (activeRingtone?.isPlaying == false) {
+                                  activeRingtone?.play()
+                              }
+                          }
+                          override fun onFinish() {
+                              stopCallRingtone(context)
+                              onTimeout()
+                          }
+                      }.start()
+                  } catch (e: Exception) {
+                      e.printStackTrace()
+                  }
+              }
+
+              fun stopCallRingtone(context: Context? = null) {
+                  try {
+                      callTimer?.cancel()
+                      callTimer = null
+                      activeRingtone?.stop()
+                      activeRingtone = null
+                      context?.let {
+                          val vibrator = it.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                          vibrator?.cancel()
+                      }
+                  } catch (e: Exception) {
+                      e.printStackTrace()
+                  }
+              }
+          }
 
           fun hashPwd(password: String): String {
               val digest = MessageDigest.getInstance("SHA-256")
@@ -188,11 +332,83 @@ jobs:
               return bytes.joinToString("") { "%02x".format(it) }
           }
 
-          data class RecordItem(val title: String, val idNumber: String, val fileCount: Int)
+          fun saveBitmapToStorage(context: Context, bitmap: Bitmap, fileName: String): String {
+              val dir = File(context.filesDir, "vault_photos")
+              if (!dir.exists()) dir.mkdirs()
+              val file = File(dir, fileName)
+              FileOutputStream(file).use { out ->
+                  bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+              }
+              return file.absolutePath
+          }
+
+          fun loadBitmapFromPath(path: String?): Bitmap? {
+              if (path.isNullOrBlank()) return null
+              val file = File(path)
+              return if (file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+          }
+
+          fun rotateBitmap(source: Bitmap, angle: Float): Bitmap {
+              val matrix = Matrix()
+              matrix.postRotate(angle)
+              return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+          }
+
+          fun cropToSquare(source: Bitmap): Bitmap {
+              val size = minOf(source.width, source.height)
+              val x = (source.width - size) / 2
+              val y = (source.height - size) / 2
+              return Bitmap.createBitmap(source, x, y, size, size)
+          }
+
+          data class RecordItem(
+              val id: String,
+              val title: String,
+              val idNumber: String,
+              val imagePath: String? = null
+          )
+
+          fun loadSavedRecords(context: Context, userName: String, catName: String): MutableList<RecordItem> {
+              val prefs = context.getSharedPreferences("shapla_vault_db", Context.MODE_PRIVATE)
+              val raw = prefs.getString("vault_${userName}_$catName", "[]") ?: "[]"
+              val list = mutableListOf<RecordItem>()
+              try {
+                  val arr = JSONArray(raw)
+                  for (i in 0 until arr.length()) {
+                      val obj = arr.getJSONObject(i)
+                      list.add(
+                          RecordItem(
+                              id = obj.optString("id"),
+                              title = obj.optString("title"),
+                              idNumber = obj.optString("idNumber"),
+                              imagePath = if (obj.has("imagePath")) obj.optString("imagePath") else null
+                          )
+                      )
+                  }
+              } catch (e: Exception) {
+                  e.printStackTrace()
+              }
+              return list
+          }
+
+          fun saveRecordsPermanently(context: Context, userName: String, catName: String, items: List<RecordItem>) {
+              val prefs = context.getSharedPreferences("shapla_vault_db", Context.MODE_PRIVATE)
+              val arr = JSONArray()
+              for (item in items) {
+                  val obj = JSONObject()
+                  obj.put("id", item.id)
+                  obj.put("title", item.title)
+                  obj.put("idNumber", item.idNumber)
+                  obj.put("imagePath", item.imagePath ?: "")
+                  arr.put(obj)
+              }
+              prefs.edit().putString("vault_${userName}_$catName", arr.toString()).apply()
+          }
 
           class MainActivity : ComponentActivity() {
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
+                  NotificationService.initChannels(this)
                   val prefs = getSharedPreferences("shapla_users", Context.MODE_PRIVATE)
 
                   setContent {
@@ -218,6 +434,7 @@ jobs:
                           )
                           "vault" -> SecureVaultScreen(
                               userName = currentLoggedInUser,
+                              userPrefs = prefs,
                               onLogout = {
                                   currentLoggedInUser = ""
                                   currentScreen = "login"
@@ -225,6 +442,11 @@ jobs:
                           )
                       }
                   }
+              }
+
+              override fun onDestroy() {
+                  super.onDestroy()
+                  NotificationService.stopCallRingtone(this)
               }
           }
 
@@ -442,38 +664,107 @@ jobs:
 
           @OptIn(ExperimentalMaterial3Api::class)
           @Composable
-          fun SecureVaultScreen(userName: String, onLogout: () -> Unit) {
+          fun SecureVaultScreen(
+              userName: String,
+              userPrefs: android.content.SharedPreferences,
+              onLogout: () -> Unit
+          ) {
+              val context = LocalContext.current
               var selectedCat by remember { mutableStateOf<VaultCat?>(null) }
               val records = remember { mutableStateListOf<RecordItem>() }
               var showAddDialog by remember { mutableStateOf(false) }
 
+              // প্রোফাইল এডিটর স্টেট
+              var showProfileDialog by remember { mutableStateOf(false) }
+              var profilePhotoPath by remember {
+                  mutableStateOf(userPrefs.getString("profile_pic_$userName", null))
+              }
+              val profileBitmap = remember(profilePhotoPath) { loadBitmapFromPath(profilePhotoPath) }
+
+              // পুরো ছবি দেখার ভিউয়ার
+              var previewImagePath by remember { mutableStateOf<String?>(null) }
+
+              // ইনকামিং কল স্টেট (৪০ সেকেন্ড রিংটোন স্ক্রিন)
+              var incomingCallName by remember { mutableStateOf<String?>(null) }
+              var callRemainingSeconds by remember { mutableStateOf(40) }
+
+              LaunchedEffect(selectedCat) {
+                  records.clear()
+                  if (selectedCat != null) {
+                      records.addAll(loadSavedRecords(context, userName, selectedCat!!.name))
+                  }
+              }
+
               Scaffold(
                   topBar = {
-                      TopAppBar(
-                          title = {
-                              Column {
-                                  Text(
-                                      text = if (selectedCat == null) "Secure Vault (নিরাপদ ভল্ট)" else selectedCat!!.titleBn,
-                                      fontWeight = FontWeight.Bold,
-                                      color = Color.White
-                                  )
-                                  Text("Designed & Owned by Mohammad Israfil Hossain", fontSize = 10.sp, color = Color(0xFFCBD5E1))
-                              }
-                          },
-                          navigationIcon = {
-                              if (selectedCat != null) {
-                                  IconButton(onClick = { selectedCat = null }) {
-                                      Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                      Surface(
+                          modifier = Modifier.fillMaxWidth(),
+                          color = BrandGreen,
+                          shadowElevation = 6.dp
+                      ) {
+                          Row(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .statusBarsPadding()
+                                  .padding(horizontal = 16.dp, vertical = 12.dp),
+                              verticalAlignment = Alignment.CenterVertically,
+                              horizontalArrangement = Arrangement.SpaceBetween
+                          ) {
+                              Row(verticalAlignment = Alignment.CenterVertically) {
+                                  if (selectedCat != null) {
+                                      IconButton(onClick = { selectedCat = null }) {
+                                          Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                      }
+                                      Spacer(modifier = Modifier.width(4.dp))
+                                  }
+                                  Column {
+                                      Text(
+                                          text = if (selectedCat == null) "শাপলা (Shapla) ভল্ট" else selectedCat!!.titleBn,
+                                          fontWeight = FontWeight.Bold,
+                                          fontSize = 18.sp,
+                                          color = Color.White
+                                      )
+                                      Text(
+                                          text = "Made by Israfil Hossain",
+                                          fontSize = 11.sp,
+                                          color = Color(0xFFD1FAE5)
+                                      )
                                   }
                               }
-                          },
-                          actions = {
-                              IconButton(onClick = onLogout) {
-                                  Icon(Icons.Default.ExitToApp, contentDescription = "Logout", tint = Color.White)
+
+                              Row(verticalAlignment = Alignment.CenterVertically) {
+                                  Box(
+                                      modifier = Modifier
+                                          .size(40.dp)
+                                          .clip(CircleShape)
+                                          .background(Color.White.copy(alpha = 0.2f))
+                                          .border(1.5.dp, BrandLeaf, CircleShape)
+                                          .clickable { showProfileDialog = true },
+                                      contentAlignment = Alignment.Center
+                                  ) {
+                                      if (profileBitmap != null) {
+                                          Image(
+                                              bitmap = profileBitmap.asImageBitmap(),
+                                              contentDescription = "Profile",
+                                              modifier = Modifier.fillMaxSize(),
+                                              contentScale = ContentScale.Crop
+                                          )
+                                      } else {
+                                          Icon(
+                                              Icons.Default.Person,
+                                              contentDescription = "Profile",
+                                              tint = Color.White,
+                                              modifier = Modifier.size(24.dp)
+                                          )
+                                      }
+                                  }
+
+                                  IconButton(onClick = onLogout) {
+                                      Icon(Icons.Default.ExitToApp, contentDescription = "Logout", tint = Color.White)
+                                  }
                               }
-                          },
-                          colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandGreen)
-                      )
+                          }
+                      }
                   },
                   floatingActionButton = {
                       if (selectedCat != null) {
@@ -488,57 +779,190 @@ jobs:
                   }
               ) { p ->
                   Box(modifier = Modifier.fillMaxSize().padding(p).background(Color(0xFFF8FAFC))) {
-                      if (selectedCat == null) {
-                          LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                              items(VaultCat.values()) { cat ->
-                                  Card(
-                                      modifier = Modifier.fillMaxWidth().clickable { selectedCat = cat },
-                                      shape = RoundedCornerShape(10.dp),
-                                      colors = CardDefaults.cardColors(containerColor = Color.White)
-                                  ) {
-                                      Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                          Icon(cat.icon, null, tint = BrandGreen, modifier = Modifier.size(36.dp))
-                                          Spacer(modifier = Modifier.width(16.dp))
-                                          Text(cat.titleBn, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                          Text("›", fontSize = 22.sp, color = Color.LightGray)
+                      Column(modifier = Modifier.fillMaxSize()) {
+                          // নোটিফিকেশন ও কল টেস্ট বার
+                          Card(
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .padding(12.dp),
+                              colors = CardDefaults.cardColors(containerColor = Color(0xFF0F2D25)),
+                              shape = RoundedCornerShape(10.dp)
+                          ) {
+                              Row(
+                                  modifier = Modifier
+                                      .fillMaxWidth()
+                                      .padding(10.dp),
+                                  horizontalArrangement = Arrangement.SpaceBetween,
+                                  verticalAlignment = Alignment.CenterVertically
+                              ) {
+                                  Text(
+                                      "সাউন্ড ও কল টেস্ট:",
+                                      color = Color.White,
+                                      fontSize = 12.sp,
+                                      fontWeight = FontWeight.SemiBold
+                                  )
+                                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                      // মেসেজ পিং বাটন
+                                      Button(
+                                          onClick = {
+                                              NotificationService.triggerMessagePing(
+                                                  context,
+                                                  "রহিম কার্পেন্টার",
+                                                  "ভাই, কাজের আপডেট পাঠিয়েছি। দেখে নিন।"
+                                              )
+                                          },
+                                          colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                                          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                      ) {
+                                          Icon(Icons.Default.Notifications, null, modifier = Modifier.size(14.dp))
+                                          Spacer(modifier = Modifier.width(4.dp))
+                                          Text("মেসেজ পিং", fontSize = 11.sp)
+                                      }
+
+                                      // ৪০ সেকেন্ড কল রিং বাটন
+                                      Button(
+                                          onClick = {
+                                              incomingCallName = "করিম ইলেকট্রিশিয়ান"
+                                              callRemainingSeconds = 40
+                                              NotificationService.startIncomingCallRingtone(context) {
+                                                  incomingCallName = null
+                                              }
+                                          },
+                                          colors = ButtonDefaults.buttonColors(containerColor = OrangeCall),
+                                          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                      ) {
+                                          Icon(Icons.Default.Phone, null, modifier = Modifier.size(14.dp))
+                                          Spacer(modifier = Modifier.width(4.dp))
+                                          Text("৪০ সে. কল টেস্ট", fontSize = 11.sp)
                                       }
                                   }
                               }
                           }
-                      } else {
-                          if (records.isEmpty()) {
-                              Column(
-                                  modifier = Modifier.fillMaxSize().padding(32.dp),
-                                  horizontalAlignment = Alignment.CenterHorizontally,
-                                  verticalArrangement = Arrangement.Center
-                              ) {
-                                  Icon(selectedCat!!.icon, null, modifier = Modifier.size(64.dp), tint = Color.LightGray)
-                                  Spacer(modifier = Modifier.height(16.dp))
-                                  Text("কোনো নথি যোগ করা হয়নি", fontWeight = FontWeight.Bold, color = Color.Gray)
-                                  Spacer(modifier = Modifier.height(16.dp))
-                                  Button(
-                                      onClick = { showAddDialog = true },
-                                      colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
-                                  ) {
-                                      Icon(Icons.Default.Add, null)
-                                      Spacer(modifier = Modifier.width(6.dp))
-                                      Text("+ Add Document")
+
+                          if (selectedCat == null) {
+                              LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                  items(VaultCat.values()) { cat ->
+                                      val count = loadSavedRecords(context, userName, cat.name).size
+                                      Card(
+                                          modifier = Modifier
+                                              .fillMaxWidth()
+                                              .shadow(2.dp, RoundedCornerShape(12.dp))
+                                              .clickable { selectedCat = cat },
+                                          shape = RoundedCornerShape(12.dp),
+                                          colors = CardDefaults.cardColors(containerColor = Color.White)
+                                      ) {
+                                          Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                              Box(
+                                                  modifier = Modifier
+                                                      .size(46.dp)
+                                                      .background(BrandGreen.copy(alpha = 0.08f), RoundedCornerShape(10.dp)),
+                                                  contentAlignment = Alignment.Center
+                                              ) {
+                                                  Icon(cat.icon, null, tint = BrandGreen, modifier = Modifier.size(26.dp))
+                                              }
+                                              Spacer(modifier = Modifier.width(16.dp))
+                                              Column(modifier = Modifier.weight(1f)) {
+                                                  Text(cat.titleBn, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                  Text(
+                                                      if (count > 0) "$count টি নথি সংরক্ষিত" else "কোনো নথি নেই",
+                                                      fontSize = 12.sp,
+                                                      color = if (count > 0) BrandLeaf else Color.Gray,
+                                                      fontWeight = FontWeight.Medium
+                                                  )
+                                              }
+                                              Text("›", fontSize = 24.sp, color = Color.LightGray)
+                                          }
+                                      }
                                   }
                               }
                           } else {
-                              LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                  items(records) { item ->
-                                      Card(
-                                          modifier = Modifier.fillMaxWidth(),
-                                          shape = RoundedCornerShape(10.dp),
-                                          colors = CardDefaults.cardColors(containerColor = Color.White)
+                              if (records.isEmpty()) {
+                                  Column(
+                                      modifier = Modifier.fillMaxSize().padding(32.dp),
+                                      horizontalAlignment = Alignment.CenterHorizontally,
+                                      verticalArrangement = Arrangement.Center
+                                  ) {
+                                      Icon(selectedCat!!.icon, null, modifier = Modifier.size(64.dp), tint = Color.LightGray)
+                                      Spacer(modifier = Modifier.height(16.dp))
+                                      Text("এই ফোল্ডারে কোনো নথি নেই", fontWeight = FontWeight.Bold, color = Color.Gray)
+                                      Spacer(modifier = Modifier.height(16.dp))
+                                      Button(
+                                          onClick = { showAddDialog = true },
+                                          colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
                                       ) {
-                                          Column(modifier = Modifier.padding(14.dp)) {
-                                              Text(item.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                                              if (item.idNumber.isNotBlank()) {
-                                                  Text("নম্বর: ${item.idNumber}", fontSize = 13.sp, color = Color.DarkGray)
+                                          Icon(Icons.Default.Add, null)
+                                          Spacer(modifier = Modifier.width(6.dp))
+                                          Text("+ নথি বা ছবি যোগ করুন")
+                                      }
+                                  }
+                              } else {
+                                  LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                      items(records) { item ->
+                                          val itemBitmap = remember(item.imagePath) { loadBitmapFromPath(item.imagePath) }
+                                          Card(
+                                              modifier = Modifier
+                                                  .fillMaxWidth()
+                                                  .shadow(2.dp, RoundedCornerShape(12.dp))
+                                              .clickable {
+                                                  if (!item.imagePath.isNullOrBlank()) {
+                                                      previewImagePath = item.imagePath
+                                                  }
+                                              },
+                                              shape = RoundedCornerShape(12.dp),
+                                              colors = CardDefaults.cardColors(containerColor = Color.White)
+                                          ) {
+                                              Row(
+                                                  modifier = Modifier.padding(14.dp),
+                                                  verticalAlignment = Alignment.CenterVertically
+                                              ) {
+                                                  if (itemBitmap != null) {
+                                                      Image(
+                                                          bitmap = itemBitmap.asImageBitmap(),
+                                                          contentDescription = "Photo",
+                                                          modifier = Modifier
+                                                              .size(60.dp)
+                                                              .clip(RoundedCornerShape(8.dp))
+                                                              .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp)),
+                                                          contentScale = ContentScale.Crop
+                                                      )
+                                                  } else {
+                                                      Box(
+                                                          modifier = Modifier
+                                                              .size(60.dp)
+                                                              .background(BrandGreen.copy(alpha = 0.1f), RoundedCornerShape(8.dp)),
+                                                          contentAlignment = Alignment.Center
+                                                      ) {
+                                                          Icon(Icons.Default.Star, null, tint = BrandGreen)
+                                                      }
+                                                  }
+
+                                                  Spacer(modifier = Modifier.width(14.dp))
+
+                                                  Column(modifier = Modifier.weight(1f)) {
+                                                      Text(item.title, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                                      if (item.idNumber.isNotBlank()) {
+                                                          Text("নম্বর: ${item.idNumber}", fontSize = 13.sp, color = Color.DarkGray)
+                                                      }
+                                                      Text(
+                                                          if (itemBitmap != null) "ছবি সংরক্ষিত (ট্যাপ করে বড় দেখুন)" else "কোনো ছবি নেই",
+                                                          fontSize = 12.sp,
+                                                          color = if (itemBitmap != null) BrandLeaf else Color.Gray,
+                                                          fontWeight = FontWeight.Medium
+                                                      )
+                                                  }
+
+                                                  IconButton(
+                                                      onClick = {
+                                                          if (!item.imagePath.isNullOrBlank()) {
+                                                              File(item.imagePath).delete()
+                                                          }
+                                                          records.remove(item)
+                                                          saveRecordsPermanently(context, userName, selectedCat!!.name, records)
+                                                      }
+                                                  ) {
+                                                      Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f))
+                                                  }
                                               }
-                                              Text("সংযুক্ত ফাইল: ${item.fileCount} টি", fontSize = 12.sp, color = BrandLeaf, fontWeight = FontWeight.Medium)
                                           }
                                       }
                                   }
@@ -546,61 +970,370 @@ jobs:
                           }
                       }
 
+                      // ছবি যোগ ও ক্রপ ডায়ালগ
                       if (showAddDialog) {
                           var docTitle by remember { mutableStateOf("") }
                           var docNum by remember { mutableStateOf("") }
-                          val files = remember { mutableStateListOf<Uri>() }
-                          val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-                              files.addAll(uris)
+                          var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+                          val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+                              if (uri != null) {
+                                  try {
+                                      context.contentResolver.openInputStream(uri)?.use { stream ->
+                                          currentBitmap = BitmapFactory.decodeStream(stream)
+                                      }
+                                  } catch (e: Exception) {
+                                      e.printStackTrace()
+                                  }
+                              }
                           }
 
-                          AlertDialog(
+                          Dialog(
                               onDismissRequest = { showAddDialog = false },
-                              title = { Text("${selectedCat!!.titleBn}-এ নথি যোগ") },
-                              text = {
-                                  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                              properties = DialogProperties(usePlatformDefaultWidth = false)
+                          ) {
+                              Card(
+                                  modifier = Modifier
+                                      .fillMaxWidth(0.92f)
+                                      .wrapContentHeight()
+                                      .padding(16.dp),
+                                  shape = RoundedCornerShape(16.dp),
+                                  colors = CardDefaults.cardColors(containerColor = Color.White)
+                              ) {
+                                  Column(
+                                      modifier = Modifier
+                                          .padding(20.dp)
+                                          .verticalScroll(rememberScrollState()),
+                                      verticalArrangement = Arrangement.spacedBy(12.dp)
+                                  ) {
+                                      Text(
+                                          text = "${selectedCat!!.titleBn}-এ নথি যোগ",
+                                          fontSize = 18.sp,
+                                          fontWeight = FontWeight.Bold,
+                                          color = BrandGreen
+                                      )
+
                                       OutlinedTextField(
                                           value = docTitle,
                                           onValueChange = { docTitle = it },
-                                          label = { Text("নথির শিরোনাম/নাম") },
+                                          label = { Text("নথির নাম (যেমন: ড্রাইভিং লাইসেন্স)") },
                                           modifier = Modifier.fillMaxWidth()
                                       )
+
                                       OutlinedTextField(
                                           value = docNum,
                                           onValueChange = { docNum = it },
-                                          label = { Text("ডকুমেন্ট/আইডি নম্বর") },
+                                          label = { Text("নম্বর/আইডি নম্বর") },
                                           modifier = Modifier.fillMaxWidth()
                                       )
+
+                                      if (currentBitmap != null) {
+                                          Box(
+                                              modifier = Modifier
+                                                  .fillMaxWidth()
+                                                  .height(200.dp)
+                                                  .clip(RoundedCornerShape(10.dp))
+                                                  .background(Color.Black.copy(alpha = 0.05f)),
+                                              contentAlignment = Alignment.Center
+                                          ) {
+                                              Image(
+                                                  bitmap = currentBitmap!!.asImageBitmap(),
+                                                  contentDescription = "Selected Photo",
+                                                  modifier = Modifier.fillMaxSize(),
+                                                  contentScale = ContentScale.Fit
+                                              )
+                                          }
+
+                                          Row(
+                                              modifier = Modifier.fillMaxWidth(),
+                                              horizontalArrangement = Arrangement.SpaceEvenly
+                                          ) {
+                                              OutlinedButton(
+                                                  onClick = { currentBitmap = rotateBitmap(currentBitmap!!, 90f) },
+                                                  contentPadding = PaddingValues(horizontal = 8.dp)
+                                              ) {
+                                                  Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
+                                                  Spacer(modifier = Modifier.width(4.dp))
+                                                  Text("ঘোরান")
+                                              }
+
+                                              OutlinedButton(
+                                                  onClick = { currentBitmap = cropToSquare(currentBitmap!!) },
+                                                  contentPadding = PaddingValues(horizontal = 8.dp)
+                                              ) {
+                                                  Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
+                                                  Spacer(modifier = Modifier.width(4.dp))
+                                                  Text("ক্রপ")
+                                              }
+
+                                              OutlinedButton(
+                                                  onClick = { currentBitmap = null },
+                                                  colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                                  contentPadding = PaddingValues(horizontal = 8.dp)
+                                              ) {
+                                                  Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
+                                                  Spacer(modifier = Modifier.width(4.dp))
+                                                  Text("বাদ")
+                                              }
+                                          }
+                                      } else {
+                                          Button(
+                                              onClick = { imagePicker.launch("image/*") },
+                                              colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                                              modifier = Modifier.fillMaxWidth()
+                                          ) {
+                                              Icon(Icons.Default.Add, null)
+                                              Spacer(modifier = Modifier.width(6.dp))
+                                              Text("গ্যালারি থেকে ছবি যুক্ত করুন")
+                                          }
+                                      }
+
+                                      Spacer(modifier = Modifier.height(8.dp))
+
+                                      Row(
+                                          modifier = Modifier.fillMaxWidth(),
+                                          horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                      ) {
+                                          OutlinedButton(
+                                              onClick = { showAddDialog = false },
+                                              modifier = Modifier.weight(1f)
+                                          ) {
+                                              Text("বাতিল")
+                                          }
+
+                                          Button(
+                                              onClick = {
+                                                  if (docTitle.isNotBlank()) {
+                                                      var savedPhotoPath: String? = null
+                                                      if (currentBitmap != null) {
+                                                          val fileName = "doc_${System.currentTimeMillis()}.jpg"
+                                                          savedPhotoPath = saveBitmapToStorage(context, currentBitmap!, fileName)
+                                                      }
+
+                                                      val newItem = RecordItem(
+                                                          id = java.util.UUID.randomUUID().toString(),
+                                                          title = docTitle,
+                                                          idNumber = docNum,
+                                                          imagePath = savedPhotoPath
+                                                      )
+                                                      records.add(newItem)
+                                                      saveRecordsPermanently(context, userName, selectedCat!!.name, records)
+                                                      showAddDialog = false
+                                                  }
+                                              },
+                                              colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
+                                              modifier = Modifier.weight(1f)
+                                          ) {
+                                              Text("সংরক্ষণ করুন")
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+
+                      // ফুল-স্ক্রিন ফটো ভিউয়ার
+                      if (previewImagePath != null) {
+                          val fullBitmap = remember(previewImagePath) { loadBitmapFromPath(previewImagePath) }
+                          Dialog(
+                              onDismissRequest = { previewImagePath = null },
+                              properties = DialogProperties(usePlatformDefaultWidth = false)
+                          ) {
+                              Box(
+                                  modifier = Modifier
+                                      .fillMaxSize()
+                                      .background(Color.Black.copy(alpha = 0.95f))
+                              ) {
+                                  if (fullBitmap != null) {
+                                      Image(
+                                          bitmap = fullBitmap.asImageBitmap(),
+                                          contentDescription = "Full Preview",
+                                          modifier = Modifier
+                                              .fillMaxSize()
+                                              .padding(16.dp),
+                                          contentScale = ContentScale.Fit
+                                      )
+                                  }
+
+                                  IconButton(
+                                      onClick = { previewImagePath = null },
+                                      modifier = Modifier
+                                          .align(Alignment.TopEnd)
+                                          .padding(16.dp)
+                                          .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                                  ) {
+                                      Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                                  }
+                              }
+                          }
+                      }
+
+                      // প্রোফাইল ফটো ডায়ালগ
+                      if (showProfileDialog) {
+                          val profilePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+                              if (uri != null) {
+                                  try {
+                                      context.contentResolver.openInputStream(uri)?.use { stream ->
+                                          val b = BitmapFactory.decodeStream(stream)
+                                          val fileName = "profile_${userName}.jpg"
+                                          val path = saveBitmapToStorage(context, b, fileName)
+                                          userPrefs.edit().putString("profile_pic_$userName", path).apply()
+                                          profilePhotoPath = path
+                                      }
+                                  } catch (e: Exception) {
+                                      e.printStackTrace()
+                                  }
+                              }
+                          }
+
+                          Dialog(onDismissRequest = { showProfileDialog = false }) {
+                              Card(
+                                  modifier = Modifier
+                                      .fillMaxWidth()
+                                      .padding(16.dp),
+                                  shape = RoundedCornerShape(16.dp),
+                                  colors = CardDefaults.cardColors(containerColor = Color.White)
+                              ) {
+                                  Column(
+                                      modifier = Modifier.padding(24.dp),
+                                      horizontalAlignment = Alignment.CenterHorizontally,
+                                      verticalArrangement = Arrangement.spacedBy(16.dp)
+                                  ) {
+                                      Text("আমার প্রোফাইল", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = BrandGreen)
+
+                                      Box(
+                                          modifier = Modifier
+                                              .size(90.dp)
+                                              .clip(CircleShape)
+                                              .border(2.dp, BrandLeaf, CircleShape)
+                                              .background(BrandGreen.copy(alpha = 0.1f)),
+                                          contentAlignment = Alignment.Center
+                                      ) {
+                                          if (profileBitmap != null) {
+                                              Image(
+                                                  bitmap = profileBitmap.asImageBitmap(),
+                                                  contentDescription = null,
+                                                  modifier = Modifier.fillMaxSize(),
+                                                  contentScale = ContentScale.Crop
+                                              )
+                                          } else {
+                                              Icon(Icons.Default.Person, null, tint = BrandGreen, modifier = Modifier.size(50.dp))
+                                          }
+                                      }
+
+                                      Text("আইডি: $userName", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+
                                       Button(
-                                          onClick = { picker.launch("*/*") },
+                                          onClick = { profilePicker.launch("image/*") },
                                           colors = ButtonDefaults.buttonColors(containerColor = BrandGreen),
                                           modifier = Modifier.fillMaxWidth()
                                       ) {
-                                          Icon(Icons.Default.Add, null)
+                                          Icon(Icons.Default.Edit, null)
                                           Spacer(modifier = Modifier.width(6.dp))
-                                          Text("ফাইল/ছবি সিলেক্ট করুন (${files.size})")
+                                          Text("প্রোফাইল ছবি পরিবর্তন")
+                                      }
+
+                                      if (profilePhotoPath != null) {
+                                          OutlinedButton(
+                                              onClick = {
+                                                  userPrefs.edit().remove("profile_pic_$userName").apply()
+                                                  profilePhotoPath = null
+                                              },
+                                              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                                              modifier = Modifier.fillMaxWidth()
+                                          ) {
+                                              Icon(Icons.Default.Delete, null)
+                                              Spacer(modifier = Modifier.width(6.dp))
+                                              Text("ছবি মুছে ফেলুন")
+                                          }
+                                      }
+
+                                      TextButton(onClick = { showProfileDialog = false }) {
+                                          Text("বন্ধ করুন", color = Color.Gray)
                                       }
                                   }
+                              }
+                          }
+                      }
+
+                      // ৪০ সেকেন্ড ইনকামিং কল স্ক্রিন (Ringing Screen Overlay)
+                      if (incomingCallName != null) {
+                          Dialog(
+                              onDismissRequest = {
+                                  NotificationService.stopCallRingtone(context)
+                                  incomingCallName = null
                               },
-                              confirmButton = {
-                                  Button(
-                                      onClick = {
-                                          if (docTitle.isNotBlank()) {
-                                              records.add(RecordItem(docTitle, docNum, files.size))
-                                              showAddDialog = false
-                                          }
-                                      },
-                                      colors = ButtonDefaults.buttonColors(containerColor = BrandGreen)
+                              properties = DialogProperties(usePlatformDefaultWidth = false)
+                          ) {
+                              Box(
+                                  modifier = Modifier
+                                      .fillMaxSize()
+                                      .background(Color(0xFF071B16)),
+                                  contentAlignment = Alignment.Center
+                              ) {
+                                  Column(
+                                      horizontalAlignment = Alignment.CenterHorizontally,
+                                      verticalArrangement = Arrangement.Center,
+                                      modifier = Modifier.padding(24.dp)
                                   ) {
-                                      Text("সংরক্ষণ করুন (Save)")
-                                  }
-                              },
-                              dismissButton = {
-                                  TextButton(onClick = { showAddDialog = false }) {
-                                      Text("বাতিল")
+                                      Text("ইনকামিং অডিও কল...", color = BrandLeaf, fontSize = 16.sp)
+                                      Spacer(modifier = Modifier.height(16.dp))
+
+                                      Box(
+                                          modifier = Modifier
+                                              .size(120.dp)
+                                              .clip(CircleShape)
+                                              .background(Color.White.copy(alpha = 0.1f))
+                                              .border(3.dp, BrandLeaf, CircleShape),
+                                          contentAlignment = Alignment.Center
+                                      ) {
+                                          Icon(Icons.Default.Person, null, tint = Color.White, modifier = Modifier.size(70.dp))
+                                      }
+
+                                      Spacer(modifier = Modifier.height(20.dp))
+                                      Text(incomingCallName!!, fontWeight = FontWeight.Bold, fontSize = 24.sp, color = Color.White)
+                                      Spacer(modifier = Modifier.height(6.dp))
+                                      Text("রিং বাজছে... (৪০ সেকেন্ড)", color = Color.LightGray, fontSize = 13.sp)
+
+                                      Spacer(modifier = Modifier.height(60.dp))
+
+                                      // রিসিভ ও কাটার বোতাম
+                                      Row(
+                                          modifier = Modifier.fillMaxWidth(),
+                                          horizontalArrangement = Arrangement.SpaceEvenly,
+                                          verticalAlignment = Alignment.CenterVertically
+                                      ) {
+                                          // কেটে দেওয়া (Decline)
+                                          FloatingActionButton(
+                                              onClick = {
+                                                  NotificationService.stopCallRingtone(context)
+                                                  incomingCallName = null
+                                              },
+                                              containerColor = Color.Red,
+                                              contentColor = Color.White,
+                                              modifier = Modifier.size(68.dp),
+                                              shape = CircleShape
+                                          ) {
+                                              Icon(Icons.Default.CallEnd, contentDescription = "Decline", modifier = Modifier.size(32.dp))
+                                          }
+
+                                          // রিসিভ করা (Accept)
+                                          FloatingActionButton(
+                                              onClick = {
+                                                  NotificationService.stopCallRingtone(context)
+                                                  incomingCallName = null
+                                              },
+                                              containerColor = BrandLeaf,
+                                              contentColor = Color.White,
+                                              modifier = Modifier.size(68.dp),
+                                              shape = CircleShape
+                                          ) {
+                                              Icon(Icons.Default.Call, contentDescription = "Accept", modifier = Modifier.size(32.dp))
+                                          }
+                                      }
                                   }
                               }
-                          )
+                          }
                       }
                   }
               }
