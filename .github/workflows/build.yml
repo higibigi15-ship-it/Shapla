@@ -79,8 +79,8 @@ jobs:
                   applicationId = "com.shapla.app"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 5
-                  versionName = "1.1.0"
+                  versionCode = 6
+                  versionName = "1.2.0"
 
                   vectorDrawables {
                       useSupportLibrary = true
@@ -213,7 +213,6 @@ jobs:
           val DarkBg = Color(0xFF071B16)
           val OrangeCall = Color(0xFFEA580C)
 
-          // ১. নোটিফিকেশন ও পিং/কল সাউন্ড হেল্পার
           object NotificationService {
               private const val CHANNEL_MSG = "shapla_messages"
               private const val CHANNEL_CALL = "shapla_calls"
@@ -224,7 +223,6 @@ jobs:
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                       val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-                      // মেসেজের জন্য পিং চ্যানেল
                       val msgChannel = NotificationChannel(
                           CHANNEL_MSG,
                           "মেসেজ নোটিফিকেশন",
@@ -234,7 +232,6 @@ jobs:
                           enableVibration(true)
                       }
 
-                      // কলের জন্য চ্যানেল
                       val callChannel = NotificationChannel(
                           CHANNEL_CALL,
                           "ইনকামিং কল নোটিফিকেশন",
@@ -253,33 +250,35 @@ jobs:
                   }
               }
 
-              // মেসেজ আসলে "পিং" শব্দ বাজানো ও নোটিফিকেশন দেওয়া
               fun triggerMessagePing(context: Context, sender: String, text: String) {
-                  val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-                  val ringtone = RingtoneManager.getRingtone(context, soundUri)
-                  ringtone?.play()
+                  try {
+                      val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                      val ringtone = RingtoneManager.getRingtone(context, soundUri)
+                      ringtone?.play()
 
-                  val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
-                  } else {
-                      vibrator?.vibrate(150)
+                      val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+                      } else {
+                          vibrator?.vibrate(150)
+                      }
+
+                      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                      val notif = NotificationCompat.Builder(context, CHANNEL_MSG)
+                          .setSmallIcon(android.R.drawable.stat_notify_chat)
+                          .setContentTitle("শাপলা বার্তা: $sender")
+                          .setContentText(text)
+                          .setPriority(NotificationCompat.PRIORITY_HIGH)
+                          .setAutoCancel(true)
+                          .build()
+                      nm.notify(System.currentTimeMillis().toInt(), notif)
+                  } catch (e: Exception) {
+                      e.printStackTrace()
                   }
-
-                  val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                  val notif = NotificationCompat.Builder(context, CHANNEL_MSG)
-                      .setSmallIcon(android.R.drawable.stat_notify_chat)
-                      .setContentTitle("শাপলা বার্তা: $sender")
-                      .setContentText(text)
-                      .setPriority(NotificationCompat.PRIORITY_HIGH)
-                      .setAutoCancel(true)
-                      .build()
-                  nm.notify(System.currentTimeMillis().toInt(), notif)
               }
 
-              // কল আসলে অবিরাম পিংপিং রিংটোন বাজবে প্রায় ৪০ সেকেন্ড
               fun startIncomingCallRingtone(context: Context, onTimeout: () -> Unit) {
-                  stopCallRingtone()
+                  stopCallRingtone(context)
                   try {
                       val callUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
                       activeRingtone = RingtoneManager.getRingtone(context, callUri)
@@ -293,7 +292,6 @@ jobs:
                           vibrator?.vibrate(pattern, 0)
                       }
 
-                      // ঠিক ৪০ সেকেন্ড টাইমার
                       callTimer = object : CountDownTimer(40000, 1000) {
                           override fun onTick(millisUntilFinished: Long) {
                               if (activeRingtone?.isPlaying == false) {
@@ -674,19 +672,15 @@ jobs:
               val records = remember { mutableStateListOf<RecordItem>() }
               var showAddDialog by remember { mutableStateOf(false) }
 
-              // প্রোফাইল এডিটর স্টেট
               var showProfileDialog by remember { mutableStateOf(false) }
               var profilePhotoPath by remember {
                   mutableStateOf(userPrefs.getString("profile_pic_$userName", null))
               }
               val profileBitmap = remember(profilePhotoPath) { loadBitmapFromPath(profilePhotoPath) }
 
-              // পুরো ছবি দেখার ভিউয়ার
               var previewImagePath by remember { mutableStateOf<String?>(null) }
 
-              // ইনকামিং কল স্টেট (৪০ সেকেন্ড রিংটোন স্ক্রিন)
               var incomingCallName by remember { mutableStateOf<String?>(null) }
-              var callRemainingSeconds by remember { mutableStateOf(40) }
 
               LaunchedEffect(selectedCat) {
                   records.clear()
@@ -780,7 +774,6 @@ jobs:
               ) { p ->
                   Box(modifier = Modifier.fillMaxSize().padding(p).background(Color(0xFFF8FAFC))) {
                       Column(modifier = Modifier.fillMaxSize()) {
-                          // নোটিফিকেশন ও কল টেস্ট বার
                           Card(
                               modifier = Modifier
                                   .fillMaxWidth()
@@ -802,7 +795,6 @@ jobs:
                                       fontWeight = FontWeight.SemiBold
                                   )
                                   Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                      // মেসেজ পিং বাটন
                                       Button(
                                           onClick = {
                                               NotificationService.triggerMessagePing(
@@ -819,11 +811,9 @@ jobs:
                                           Text("মেসেজ পিং", fontSize = 11.sp)
                                       }
 
-                                      // ৪০ সেকেন্ড কল রিং বাটন
                                       Button(
                                           onClick = {
                                               incomingCallName = "করিম ইলেকট্রিশিয়ান"
-                                              callRemainingSeconds = 40
                                               NotificationService.startIncomingCallRingtone(context) {
                                                   incomingCallName = null
                                               }
@@ -970,7 +960,6 @@ jobs:
                           }
                       }
 
-                      // ছবি যোগ ও ক্রপ ডায়ালগ
                       if (showAddDialog) {
                           var docTitle by remember { mutableStateOf("") }
                           var docNum by remember { mutableStateOf("") }
@@ -1027,7 +1016,8 @@ jobs:
                                           modifier = Modifier.fillMaxWidth()
                                       )
 
-                                      if (currentBitmap != null) {
+                                      val activeBmp = currentBitmap
+                                      if (activeBmp != null) {
                                           Box(
                                               modifier = Modifier
                                                   .fillMaxWidth()
@@ -1037,7 +1027,7 @@ jobs:
                                               contentAlignment = Alignment.Center
                                           ) {
                                               Image(
-                                                  bitmap = currentBitmap!!.asImageBitmap(),
+                                                  bitmap = activeBmp.asImageBitmap(),
                                                   contentDescription = "Selected Photo",
                                                   modifier = Modifier.fillMaxSize(),
                                                   contentScale = ContentScale.Fit
@@ -1049,7 +1039,9 @@ jobs:
                                               horizontalArrangement = Arrangement.SpaceEvenly
                                           ) {
                                               OutlinedButton(
-                                                  onClick = { currentBitmap = rotateBitmap(currentBitmap!!, 90f) },
+                                                  onClick = {
+                                                      currentBitmap = rotateBitmap(activeBmp, 90f)
+                                                  },
                                                   contentPadding = PaddingValues(horizontal = 8.dp)
                                               ) {
                                                   Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
@@ -1058,7 +1050,9 @@ jobs:
                                               }
 
                                               OutlinedButton(
-                                                  onClick = { currentBitmap = cropToSquare(currentBitmap!!) },
+                                                  onClick = {
+                                                      currentBitmap = cropToSquare(activeBmp)
+                                                  },
                                                   contentPadding = PaddingValues(horizontal = 8.dp)
                                               ) {
                                                   Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
@@ -1105,9 +1099,10 @@ jobs:
                                               onClick = {
                                                   if (docTitle.isNotBlank()) {
                                                       var savedPhotoPath: String? = null
-                                                      if (currentBitmap != null) {
+                                                      val bToSave = currentBitmap
+                                                      if (bToSave != null) {
                                                           val fileName = "doc_${System.currentTimeMillis()}.jpg"
-                                                          savedPhotoPath = saveBitmapToStorage(context, currentBitmap!, fileName)
+                                                          savedPhotoPath = saveBitmapToStorage(context, bToSave, fileName)
                                                       }
 
                                                       val newItem = RecordItem(
@@ -1132,7 +1127,6 @@ jobs:
                           }
                       }
 
-                      // ফুল-স্ক্রিন ফটো ভিউয়ার
                       if (previewImagePath != null) {
                           val fullBitmap = remember(previewImagePath) { loadBitmapFromPath(previewImagePath) }
                           Dialog(
@@ -1168,17 +1162,18 @@ jobs:
                           }
                       }
 
-                      // প্রোফাইল ফটো ডায়ালগ
                       if (showProfileDialog) {
                           val profilePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
                               if (uri != null) {
                                   try {
                                       context.contentResolver.openInputStream(uri)?.use { stream ->
                                           val b = BitmapFactory.decodeStream(stream)
-                                          val fileName = "profile_${userName}.jpg"
-                                          val path = saveBitmapToStorage(context, b, fileName)
-                                          userPrefs.edit().putString("profile_pic_$userName", path).apply()
-                                          profilePhotoPath = path
+                                          if (b != null) {
+                                              val fileName = "profile_${userName}.jpg"
+                                              val path = saveBitmapToStorage(context, b, fileName)
+                                              userPrefs.edit().putString("profile_pic_$userName", path).apply()
+                                              profilePhotoPath = path
+                                          }
                                       }
                                   } catch (e: Exception) {
                                       e.printStackTrace()
@@ -1256,7 +1251,6 @@ jobs:
                           }
                       }
 
-                      // ৪০ সেকেন্ড ইনকামিং কল স্ক্রিন (Ringing Screen Overlay)
                       if (incomingCallName != null) {
                           Dialog(
                               onDismissRequest = {
@@ -1297,13 +1291,11 @@ jobs:
 
                                       Spacer(modifier = Modifier.height(60.dp))
 
-                                      // রিসিভ ও কাটার বোতাম
                                       Row(
                                           modifier = Modifier.fillMaxWidth(),
                                           horizontalArrangement = Arrangement.SpaceEvenly,
                                           verticalAlignment = Alignment.CenterVertically
                                       ) {
-                                          // কেটে দেওয়া (Decline)
                                           FloatingActionButton(
                                               onClick = {
                                                   NotificationService.stopCallRingtone(context)
@@ -1314,10 +1306,9 @@ jobs:
                                               modifier = Modifier.size(68.dp),
                                               shape = CircleShape
                                           ) {
-                                              Icon(Icons.Default.CallEnd, contentDescription = "Decline", modifier = Modifier.size(32.dp))
+                                              Icon(Icons.Default.Close, contentDescription = "Decline", modifier = Modifier.size(32.dp))
                                           }
 
-                                          // রিসিভ করা (Accept)
                                           FloatingActionButton(
                                               onClick = {
                                                   NotificationService.stopCallRingtone(context)
@@ -1328,7 +1319,7 @@ jobs:
                                               modifier = Modifier.size(68.dp),
                                               shape = CircleShape
                                           ) {
-                                              Icon(Icons.Default.Call, contentDescription = "Accept", modifier = Modifier.size(32.dp))
+                                              Icon(Icons.Default.Phone, contentDescription = "Accept", modifier = Modifier.size(32.dp))
                                           }
                                       }
                                   }
