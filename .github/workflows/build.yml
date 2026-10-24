@@ -90,8 +90,8 @@ jobs:
                   applicationId = "com.shapla.app"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 17
-                  versionName = "3.0.0"
+                  versionCode = 20
+                  versionName = "3.1.0"
 
                   vectorDrawables {
                       useSupportLibrary = true
@@ -188,7 +188,7 @@ jobs:
           </adaptive-icon>
           EOF
 
-          # 9. AndroidManifest.xml (শতভাগ নিখুঁত ও বন্ধনী সহ)
+          # 9. AndroidManifest.xml
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -227,7 +227,7 @@ jobs:
           </manifest>
           EOF
 
-          # 10. MainActivity.kt (সম্পূর্ণ কোড)
+          # 10. MainActivity.kt (সংশোধিত ও শতভাগ নিখুঁত)
           cat << 'EOF' > app/src/main/java/com/shapla/app/MainActivity.kt
           package com.shapla.app
 
@@ -273,6 +273,7 @@ jobs:
           import androidx.compose.ui.draw.clip
           import androidx.compose.ui.graphics.Color
           import androidx.compose.ui.graphics.asImageBitmap
+          import androidx.compose.ui.graphics.vector.ImageVector
           import androidx.compose.ui.layout.ContentScale
           import androidx.compose.ui.platform.LocalContext
           import androidx.compose.ui.res.painterResource
@@ -465,10 +466,9 @@ jobs:
                           modifier = Modifier.size(110.dp).clip(RoundedCornerShape(24.dp)).background(ShaplaDeepGreen),
                           contentAlignment = Alignment.Center
                       ) {
-                          Icon(
+                          Image(
                               painter = painterResource(id = R.drawable.ic_shapla_foreground),
                               contentDescription = "Shapla Logo",
-                              tint = Color.Unspecified,
                               modifier = Modifier.size(90.dp)
                           )
                       }
@@ -956,11 +956,19 @@ jobs:
 
               LazyColumn(modifier = Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                   item {
-                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
                           Text("Shapla Feed", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = ShaplaDeepGreen)
                           Row {
-                              IconButton(onClick = onCallTest) { Icon(Icons.Default.Phone, null, tint = ShaplaAmber) }
-                              IconButton(onClick = { ShaplaSoundEngine.playTriplePing(context) }) { Icon(Icons.Default.Notifications, null, tint = ShaplaDeepGreen) }
+                              IconButton(onClick = onCallTest) {
+                                  Icon(Icons.Default.Phone, contentDescription = "Call", tint = ShaplaAmber)
+                              }
+                              IconButton(onClick = { ShaplaSoundEngine.playTriplePing(context) }) {
+                                  Icon(Icons.Default.Notifications, contentDescription = "Ping", tint = ShaplaDeepGreen)
+                              }
                           }
                       }
                   }
