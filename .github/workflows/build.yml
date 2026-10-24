@@ -1,44 +1,751 @@
-
 name: Build Shapla APK
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
-  build:
+  build-apk:
     name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Source
+      - name: চেকআউট রিপোজিটরি
         uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: জাভা (JDK 17) সেটআপ
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: স্থায়ী কীস্টোর তৈরি (ভবিষ্যতের আপডেটের জন্য)
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Shapla,O=Israfil,C=BD"
+          fi
 
-      - name: Install Gradle 8.5
-        uses: gradle/actions/setup-gradle@v4
+      - name: গ্র্যাডল সেটআপ
+        uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: "8.5"
+          gradle-version: 8.5
+          cache-disabled: true
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --no-daemon
+      - name: অ্যান্ড্রয়েড রিসোর্স ও কোড তৈরি করা হচ্ছে
+        run: |
+          mkdir -p app/src/main/java/com/shapla/app
+          mkdir -p app/src/main/res/drawable
+          mkdir -p app/src/main/res/mipmap-anydpi-v26
+          mkdir -p app/src/main/res/xml
 
-      - name: Upload Shapla APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: Shapla-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          # 1. gradle.properties
+          cat << 'EOF' > gradle.properties
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          EOF
+
+          # 2. settings.gradle.kts
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Shapla"
+          include(":app")
+          EOF
+
+          # 3. build.gradle.kts (Root)
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.2.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+          }
+          EOF
+
+          # 4. app/build.gradle.kts
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "com.shapla.app"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.shapla.app"
+                  minSdk = 24
+                  targetSdk = 34
+                  versionCode = 15
+                  versionName = "2.8.0"
+
+                  vectorDrawables {
+                      useSupportLibrary = true
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              buildFeatures {
+                  compose = true
+              }
+              composeOptions {
+                  kotlinCompilerExtensionVersion = "1.5.8"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.12.0")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+              implementation("androidx.activity:activity-compose:1.8.2")
+              implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+          }
+          EOF
+
+          # 5. FileProvider XML
+          cat << 'EOF' > app/src/main/res/xml/file_paths.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <files-path name="vault_photos" path="vault_photos/" />
+              <files-path name="all_files" path="." />
+          </paths>
+          EOF
+
+          # 6. শাপলা অ্যাপ আইকন ব্যাকগ্রাউন্ড (Deep Green)
+          cat << 'EOF' > app/src/main/res/drawable/ic_shapla_background.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#0B4636"
+                  android:pathData="M0,0h108v108h-108z" />
+          </vector>
+          EOF
+
+          # 7. শাপলা অ্যাপ আইকন ফোরগ্রাউন্ড (White Lotus Flower)
+          cat << 'EOF' > app/src/main/res/drawable/ic_shapla_foreground.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <group
+                  android:scaleX="0.65"
+                  android:scaleY="0.65"
+                  android:translateX="18.9"
+                  android:translateY="18.9">
+                  <path
+                      android:fillColor="#FFFFFF"
+                      android:pathData="M54,20 C51,32 44,48 54,68 C64,48 57,32 54,20 Z" />
+                  <path
+                      android:fillColor="#FFFFFF"
+                      android:pathData="M51,26 C43,36 33,52 46,67 C48,54 50,38 51,26 Z" />
+                  <path
+                      android:fillColor="#FFFFFF"
+                      android:pathData="M57,26 C65,36 75,52 62,67 C60,54 58,38 57,26 Z" />
+                  <path
+                      android:fillColor="#FFFFFF"
+                      android:pathData="M44,36 C32,46 22,60 38,71 C41,58 43,46 44,36 Z" />
+                  <path
+                      android:fillColor="#FFFFFF"
+                      android:pathData="M64,36 C76,46 86,60 70,71 C67,58 65,46 64,36 Z" />
+                  <path
+                      android:fillColor="#10B981"
+                      android:pathData="M24,72 C40,78 68,78 84,72 C78,76 66,80 54,80 C42,80 30,76 24,72 Z" />
+                  <path
+                      android:fillColor="#0F766E"
+                      android:pathData="M34,79 C46,84 62,84 74,79 C68,82 60,84 54,84 C48,84 40,82 34,79 Z" />
+              </group>
+          </vector>
+          EOF
+
+          # 8. অ্যাডাপ্টিভ লঞ্চার আইকন XML
+          cat << 'EOF' > app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_shapla_background" />
+              <foreground android:drawable="@drawable/ic_shapla_foreground" />
+          </adaptive-icon>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@drawable/ic_shapla_background" />
+              <foreground android:drawable="@drawable/ic_shapla_foreground" />
+          </adaptive-icon>
+          EOF
+
+          # 9. AndroidManifest.xml (শতভাগ নিখুঁত ও সম্পূর্ণ)
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:label="Shapla"
+                  android:supportsRtl="true"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="com.shapla.app.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths" />
+                  </provider>
+              </application>
+          </manifest>
+          EOF
+
+          # 10. MainActivity.kt (সম্পূর্ণ অ্যাপ্লিকেশন কোড)
+          cat << 'EOF' > app/src/main/java/com/shapla/app/MainActivity.kt
+          package com.shapla.app
+
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.content.Context
+          import android.content.Intent
+          import android.graphics.*
+          import android.media.AudioManager
+          import android.media.ToneGenerator
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.os.CountDownTimer
+          import android.os.Handler
+          import android.os.Looper
+          import android.os.VibrationEffect
+          import android.os.Vibrator
+          import android.widget.Toast
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.BackHandler
+          import androidx.activity.compose.rememberLauncherForActivityResult
+          import androidx.activity.compose.setContent
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.Image
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.border
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.gestures.detectTransformGestures
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.LazyRow
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.shape.CircleShape
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.*
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.asImageBitmap
+          import androidx.compose.ui.graphics.graphicsLayer
+          import androidx.compose.ui.input.pointer.pointerInput
+          import androidx.compose.ui.layout.ContentScale
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.PasswordVisualTransformation
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import androidx.compose.ui.window.Dialog
+          import androidx.compose.ui.window.DialogProperties
+          import androidx.core.content.FileProvider
+          import java.io.File
+          import java.io.FileOutputStream
+          import java.security.MessageDigest
+          import java.util.UUID
+
+          val ShaplaDeepGreen = Color(0xFF0B4636)
+          val ShaplaLeafGreen = Color(0xFF10B981)
+          val ShaplaAmber = Color(0xFFD97706)
+          val ShaplaBg = Color(0xFFF0F2F5)
+
+          object ShaplaSoundEngine {
+              private var callTimer: CountDownTimer? = null
+              private var isCallRinging = false
+              private val handler = Handler(Looper.getMainLooper())
+              private var toneGen: ToneGenerator? = null
+
+              init {
+                  try { toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100) } catch (e: Exception) { e.printStackTrace() }
+              }
+
+              fun playTriplePing(context: Context) {
+                  try {
+                      toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+                      handler.postDelayed({ toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 100) }, 130)
+                      handler.postDelayed({ toneGen?.startTone(ToneGenerator.TONE_PROP_ACK, 140) }, 260)
+                      val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                          vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 80, 80, 80, 80, 100), -1))
+                      } else { vibrator?.vibrate(200) }
+                  } catch (e: Exception) { e.printStackTrace() }
+              }
+
+              fun start40sCallRingtone(context: Context, onFinish: () -> Unit) {
+                  stopCallRingtone(context)
+                  isCallRinging = true
+                  val callToneGen = try { ToneGenerator(AudioManager.STREAM_VOICE_CALL, 100) } catch (e: Exception) { toneGen }
+
+                  val runnable = object : Runnable {
+                      override fun run() {
+                          if (isCallRinging) {
+                              callToneGen?.startTone(ToneGenerator.TONE_PROP_BEEP2, 220)
+                              handler.postDelayed({ if (isCallRinging) callToneGen?.startTone(ToneGenerator.TONE_PROP_BEEP2, 220) }, 250)
+                              handler.postDelayed(this, 1200)
+                          }
+                      }
+                  }
+                  handler.post(runnable)
+
+                  callTimer = object : CountDownTimer(40000, 1000) {
+                      override fun onTick(m: Long) {}
+                      override fun onFinish() { stopCallRingtone(context); onFinish() }
+                  }.start()
+              }
+
+              fun stopCallRingtone(context: Context? = null) {
+                  isCallRinging = false
+                  callTimer?.cancel()
+                  callTimer = null
+                  toneGen?.stopTone()
+              }
+          }
+
+          object ImageEditUtils {
+              fun rotate(src: Bitmap, angle: Float): Bitmap {
+                  val m = Matrix().apply { postRotate(angle) }
+                  return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
+              }
+
+              fun flip(src: Bitmap, horizontal: Boolean): Bitmap {
+                  val m = Matrix().apply { postScale(if (horizontal) -1f else 1f, if (horizontal) 1f else -1f) }
+                  return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
+              }
+
+              fun cropAspect(src: Bitmap, aspectX: Int, aspectY: Int): Bitmap {
+                  val targetRatio = aspectX.toFloat() / aspectY.toFloat()
+                  val srcRatio = src.width.toFloat() / src.height.toFloat()
+                  var w = src.width
+                  var h = src.height
+                  if (srcRatio > targetRatio) { w = (h * targetRatio).toInt() } else { h = (w / targetRatio).toInt() }
+                  val x = (src.width - w) / 2
+                  val y = (src.height - h) / 2
+                  return Bitmap.createBitmap(src, x, y, w, h)
+              }
+
+              fun applyFilter(src: Bitmap, filterType: String): Bitmap {
+                  val out = Bitmap.createBitmap(src.width, src.height, src.config ?: Bitmap.Config.ARGB_8888)
+                  val canvas = Canvas(out)
+                  val paint = Paint()
+                  val cm = ColorMatrix()
+
+                  when (filterType) {
+                      "grayscale" -> cm.setSaturation(0f)
+                      "sepia" -> {
+                          cm.setScale(1f, 0.95f, 0.82f, 1f)
+                          val sepiaMatrix = ColorMatrix(floatArrayOf(
+                              0.393f, 0.769f, 0.189f, 0f, 0f,
+                              0.349f, 0.686f, 0.168f, 0f, 0f,
+                              0.272f, 0.534f, 0.131f, 0f, 0f,
+                              0f, 0f, 0f, 1f, 0f
+                          ))
+                          cm.postConcat(sepiaMatrix)
+                      }
+                      "warm" -> cm.setScale(1.2f, 1.0f, 0.8f, 1f)
+                      "cool" -> cm.setScale(0.8f, 1.0f, 1.2f, 1f)
+                  }
+                  paint.colorFilter = ColorMatrixColorFilter(cm)
+                  canvas.drawBitmap(src, 0f, 0f, paint)
+                  return out
+              }
+          }
+
+          data class VaultFolder(val id: String, val name: String, val parentId: String? = null, val isTrash: Boolean = false)
+          data class VaultFile(val id: String, val folderId: String?, val title: String, val idNumber: String, val imagePath: String, val isTrash: Boolean = false)
+          data class PostItem(val id: String, val authorName: String, val timeAgo: String, var content: String, val imagePath: String? = null, var likes: Int = 18, var isLiked: Boolean = false)
+
+          fun hashPwd(p: String): String = MessageDigest.getInstance("SHA-256").digest(p.toByteArray()).joinToString("") { "%02x".format(it) }
+
+          fun saveBitmapToFile(context: Context, bmp: Bitmap, fileName: String): File {
+              val dir = File(context.filesDir, "vault_photos").apply { if (!exists()) mkdirs() }
+              val file = File(dir, fileName)
+              FileOutputStream(file).use { bmp.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+              return file
+          }
+
+          fun shareImageFile(context: Context, filePath: String) {
+              try {
+                  val file = File(filePath)
+                  if (!file.exists()) { Toast.makeText(context, "ফাইলটি খুঁজে পাওয়া যায়নি!", Toast.LENGTH_SHORT).show(); return }
+                  val contentUri = FileProvider.getUriForFile(context, "com.shapla.app.fileprovider", file)
+                  val intent = Intent(Intent.ACTION_SEND).apply {
+                      type = "image/jpeg"
+                      putExtra(Intent.EXTRA_STREAM, contentUri)
+                      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                  }
+                  context.startActivity(Intent.createChooser(intent, "Shapla — শেয়ার করুন"))
+              } catch (e: Exception) {
+                  Toast.makeText(context, "শেয়ার ব্যর্থ: ${e.message}", Toast.LENGTH_SHORT).show()
+              }
+          }
+
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val prefs = getSharedPreferences("shapla_users", Context.MODE_PRIVATE)
+
+                  setContent {
+                      var isSplashActive by remember { mutableStateOf(true) }
+                      var currentScreen by remember { mutableStateOf("login") }
+                      var loggedInUser by remember { mutableStateOf("") }
+
+                      LaunchedEffect(Unit) {
+                          kotlinx.coroutines.delay(1500)
+                          isSplashActive = false
+                      }
+
+                      if (isSplashActive) {
+                          BrandedSplashScreen()
+                      } else {
+                          when (currentScreen) {
+                              "login" -> LoginScreen(
+                                  prefs = prefs,
+                                  onSuccess = { user -> loggedInUser = user; currentScreen = "main" },
+                                  onGoRegister = { currentScreen = "register" }
+                              )
+                              "register" -> RegisterScreen(
+                                  prefs = prefs,
+                                  onSuccess = { user -> loggedInUser = user; currentScreen = "main" },
+                                  onGoLogin = { currentScreen = "login" }
+                              )
+                              "main" -> MainAppHub(
+                                  userName = loggedInUser,
+                                  userPrefs = prefs,
+                                  onLogout = { loggedInUser = ""; currentScreen = "login" }
+                              )
+                          }
+                      }
+                  }
+              }
+
+              override fun onDestroy() {
+                  super.onDestroy()
+                  ShaplaSoundEngine.stopCallRingtone(this)
+              }
+          }
+
+          @Composable
+          fun BrandedSplashScreen() {
+              Box(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .background(Color.White),
+                  contentAlignment = Alignment.Center
+              ) {
+                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                      Box(
+                          modifier = Modifier
+                              .size(105.dp)
+                              .clip(RoundedCornerShape(22.dp))
+                              .background(ShaplaDeepGreen),
+                          contentAlignment = Alignment.Center
+                      ) {
+                          Icon(
+                              imageVector = Icons.Default.Star,
+                              contentDescription = "Shapla Logo",
+                              tint = Color.White,
+                              modifier = Modifier.size(60.dp)
+                          )
+                      }
+                      Spacer(modifier = Modifier.height(18.dp))
+                      Text(
+                          text = "Shapla",
+                          fontSize = 32.sp,
+                          fontWeight = FontWeight.ExtraBold,
+                          color = ShaplaDeepGreen
+                      )
+                      Text(
+                          text = "শাপলা",
+                          fontSize = 18.sp,
+                          fontWeight = FontWeight.SemiBold,
+                          color = ShaplaLeafGreen
+                      )
+                      Spacer(modifier = Modifier.height(6.dp))
+                      Text(
+                          text = "কাজ, সেবা, সব একসাথে।",
+                          fontSize = 14.sp,
+                          color = Color.DarkGray
+                      )
+                      Spacer(modifier = Modifier.height(28.dp))
+                      Text(
+                          text = "Designed & Owned by Mohammad Israfil Hossain",
+                          fontSize = 11.sp,
+                          color = Color.Gray
+                      )
+                  }
+              }
+          }
+
+          @Composable
+          fun LoginScreen(prefs: android.content.SharedPreferences, onSuccess: (String) -> Unit, onGoRegister: () -> Unit) {
+              var phone by remember { mutableStateOf("") }
+              var pwd by remember { mutableStateOf("") }
+              var err by remember { mutableStateOf<String?>(null) }
+
+              Column(
+                  modifier = Modifier.fillMaxSize().background(Color.White).padding(28.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+              ) {
+                  Text("Shapla", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, color = ShaplaDeepGreen)
+                  Text("কাজ, সেবা, সব একসাথে।", fontSize = 15.sp, color = ShaplaLeafGreen)
+                  Spacer(modifier = Modifier.height(24.dp))
+                  if (err != null) Text(err!!, color = Color.Red, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+                  OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("মোবাইল নম্বর") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                  Spacer(modifier = Modifier.height(10.dp))
+                  OutlinedTextField(value = pwd, onValueChange = { pwd = it }, label = { Text("পাসওয়ার্ড") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                  Spacer(modifier = Modifier.height(20.dp))
+
+                  Button(
+                      onClick = {
+                          val saved = prefs.getString("pwd_$phone", null)
+                          if (saved != null && saved == hashPwd(pwd)) { err = null; onSuccess(phone) } else { err = "ভুল মোবাইল বা পাসওয়ার্ড!" }
+                      },
+                      modifier = Modifier.fillMaxWidth().height(50.dp),
+                      colors = ButtonDefaults.buttonColors(containerColor = ShaplaDeepGreen),
+                      shape = RoundedCornerShape(12.dp)
+                  ) { Text("লগইন করুন (Log In)", fontWeight = FontWeight.Bold) }
+
+                  Spacer(modifier = Modifier.height(12.dp))
+                  TextButton(onClick = onGoRegister) { Text("নতুন অ্যাকাউন্ট তৈরি করুন", color = ShaplaLeafGreen) }
+              }
+          }
+
+          @Composable
+          fun RegisterScreen(prefs: android.content.SharedPreferences, onSuccess: (String) -> Unit, onGoLogin: () -> Unit) {
+              var name by remember { mutableStateOf("") }
+              var phone by remember { mutableStateOf("") }
+              var pwd by remember { mutableStateOf("") }
+
+              Column(
+                  modifier = Modifier.fillMaxSize().background(Color.White).padding(28.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+              ) {
+                  Text("নতুন অ্যাকাউন্ট", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = ShaplaDeepGreen)
+                  Spacer(modifier = Modifier.height(18.dp))
+                  OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("পুরো নাম") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                  Spacer(modifier = Modifier.height(10.dp))
+                  OutlinedTextField(value = phone, onValueChange = { phone = it }, label = { Text("মোবাইল নম্বর") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                  Spacer(modifier = Modifier.height(10.dp))
+                  OutlinedTextField(value = pwd, onValueChange = { pwd = it }, label = { Text("পাসওয়ার্ড (৬+ সংখ্যা)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                  Spacer(modifier = Modifier.height(20.dp))
+
+                  Button(
+                      onClick = {
+                          if (phone.isNotBlank() && pwd.length >= 6) {
+                              prefs.edit().putString("pwd_$phone", hashPwd(pwd)).putString("name_$phone", name).apply()
+                              onSuccess(phone)
+                          }
+                      },
+                      modifier = Modifier.fillMaxWidth().height(50.dp),
+                      colors = ButtonDefaults.buttonColors(containerColor = ShaplaDeepGreen),
+                      shape = RoundedCornerShape(12.dp)
+                  ) { Text("নিবন্ধন সম্পন্ন করুন", fontWeight = FontWeight.Bold) }
+                  Spacer(modifier = Modifier.height(12.dp))
+                  TextButton(onClick = onGoLogin) { Text("লগইন পেজে ফিরুন", color = ShaplaDeepGreen) }
+              }
+          }
+
+          @Composable
+          fun MainAppHub(userName: String, userPrefs: android.content.SharedPreferences, onLogout: () -> Unit) {
+              val context = LocalContext.current
+              var activeTab by remember { mutableStateOf("home") }
+              var lastBackPressTime by remember { mutableStateOf(0L) }
+
+              var previewImageFile by remember { mutableStateOf<String?>(null) }
+              var editingImageFile by remember { mutableStateOf<String?>(null) }
+              var isIncomingCallActive by remember { mutableStateOf(false) }
+
+              BackHandler(enabled = true) {
+                  when {
+                      editingImageFile != null -> editingImageFile = null
+                      previewImageFile != null -> previewImageFile = null
+                      activeTab != "home" -> activeTab = "home"
+                      else -> {
+                          val now = System.currentTimeMillis()
+                          if (now - lastBackPressTime < 2000) {
+                              (context as? ComponentActivity)?.finish()
+                          } else {
+                              lastBackPressTime = now
+                              Toast.makeText(context, "অ্যাপ থেকে বের হতে আবার চাপুন", Toast.LENGTH_SHORT).show()
+                          }
+                      }
+                  }
+              }
+
+              Scaffold(
+                  bottomBar = {
+                      Surface(color = Color.White, shadowElevation = 8.dp, modifier = Modifier.fillMaxWidth()) {
+                          Row(
+                              modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 4.dp),
+                              horizontalArrangement = Arrangement.SpaceAround,
+                              verticalAlignment = Alignment.CenterVertically
+                          ) {
+                              NavBarBtn(icon = Icons.Default.Home, label = "Home", isSel = activeTab == "home") { activeTab = "home" }
+                              NavBarBtn(icon = Icons.Default.Lock, label = "Vault", isSel = activeTab == "vault") { activeTab = "vault" }
+                              NavBarBtn(icon = Icons.Default.Star, label = "Job", isSel = activeTab == "job") { activeTab = "job" }
+                              NavBarBtn(icon = Icons.Default.Settings, label = "Settings", isSel = activeTab == "settings") { activeTab = "settings" }
+                          }
+                      }
+                  }
+              ) { padding ->
+                  Box(modifier = Modifier.fillMaxSize().padding(padding).background(ShaplaBg)) {
+                      when (activeTab) {
+                          "home" -> HomeScreen(
+                              userName = userName,
+                              onTriggerCall = {
+                                  isIncomingCallActive = true
+                                  ShaplaSoundEngine.start40sCallRingtone(context) { isIncomingCallActive = false }
+                              },
+                              onPreview = { previewImageFile = it }
+                          )
+                          "vault" -> AdvancedVaultScreen(
+                              userName = userName,
+                              onPreview = { previewImageFile = it },
+                              onEditPhoto = { editingImageFile = it }
+                          )
+                          "job" -> JobScreen()
+                          "settings" -> SettingsScreen(userName = userName, onLogout = onLogout)
+                      }
+
+                      if (previewImageFile != null) {
+                          ZoomableImagePreview(
+                              filePath = previewImageFile!!,
+                              onClose = { previewImageFile = null },
+                              onShare = { shareImageFile(context, previewImageFile!!) }
+                          )
+                      }
+
+                      if (editingImageFile != null) {
+                          CompleteImageEditorDialog(
+                              inputFilePath = editingImageFile!!,
+                              onClose = { editingImageFile = null },
+                              onSaveEdited = { editedBmp ->
+                                  val newFile = saveBitmapToFile(context, editedBmp, "edited_${System.currentTimeMillis()}.jpg")
+                                  editingImageFile = null
+                                  previewImageFile = newFile.absolutePath
+                                  Toast.makeText(context, "এডিটেড ছবি সফলভাবে সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
+                              }
+                          )
+                      }
+
+                      if (isIncomingCallActive) {
+                          CallOverlay(
+                              caller = "করিম (কাজের ক্লায়েন্ট)",
+                              onEnd = {
+                                  ShaplaSoundEngine.stopCallRingtone(context)
+                                  isIncomingCallActive = false
+                              }
+                          )
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun NavBarBtn(icon: ImageVector, label: String, isSel: Boolean, onClick: () -> Unit) {
+              Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  modifier = Modifier.clickable { onClick() }.padding(horizontal = 14.dp, vertical = 6.dp)
+              ) {
+                  Icon(icon, contentDescription = label, tint = if (isSel) ShaplaDeepGreen else Color.Gray, modifier = Modifier.size(24.dp))
+                  Text(label, fontSize = 11.sp, color = if (isSel) ShaplaDeepGreen else Color.Gray, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal)
+              }
+          }
+
+          @Composable
+          fun AdvancedVaultScreen(userName: String, onPreview: (String) -> Unit, onEditPhoto: (String) -> Unit) {
+              val context = LocalContext.current
+              var currentFolderId by remember { mutableStateOf<String?>(null) }
+              var isTrashView by remember { mutableStateOf(false) }
+
+              val folders = remember {
+                  mutableStateListOf(
+                      VaultFolder("f_nid", "জাতীয় পরিচয়পত্র (NID)"),
+                      VaultFolder("f_pass", "পাসপোর্ট ও ভিসা"),
+                      VaultFolder("f_land", "জমিজমা ও সম্পত্তি"),
+                      VaultFolder("f_car", "গাড়ির কাগজপত্র")
+                  )
+              }
+
+              val files = remember { mutableStateListOf<VaultFile>() }
+
+              var showNewFolderDialog by remember { mutableStateOf(false) }
+              var showNewFileDialog by remember { mutableStateOf(false) }
+
+              BackHandler(enabled = currentFolderId != null || isTrashView) {
+                  if (isTrashView) isTrashView = false else currentFolderId = null
+              }
+
+              val currentFolder = folders.find { it.id == currentFolderId }
+
+              Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
+                  Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArr
