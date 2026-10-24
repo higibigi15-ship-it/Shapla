@@ -11,29 +11,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: চেকআউট রিপোজিটরি
+      - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: জাভা (JDK 17) সেটআপ
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: স্থায়ী কীস্টোর তৈরি (ভবিষ্যতের আপডেটের জন্য)
+      - name: Setup Keystore
         run: |
           mkdir -p ~/.android
           if [ ! -f ~/.android/debug.keystore ]; then
             keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Shapla,O=Israfil,C=BD"
           fi
 
-      - name: গ্র্যাডল সেটআপ
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: 8.5
           cache-disabled: true
 
-      - name: অ্যান্ড্রয়েড রিসোর্স ও কোড তৈরি করা হচ্ছে
+      - name: Generate Project Files
         run: |
           mkdir -p app/src/main/java/com/shapla/app
           mkdir -p app/src/main/res/drawable
@@ -67,7 +67,7 @@ jobs:
           include(":app")
           EOF
 
-          # 3. build.gradle.kts (Root)
+          # 3. build.gradle.kts
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.2.2" apply false
@@ -90,8 +90,8 @@ jobs:
                   applicationId = "com.shapla.app"
                   minSdk = 24
                   targetSdk = 34
-                  versionCode = 15
-                  versionName = "2.8.0"
+                  versionCode = 17
+                  versionName = "3.0.0"
 
                   vectorDrawables {
                       useSupportLibrary = true
@@ -133,13 +133,13 @@ jobs:
           # 5. FileProvider XML
           cat << 'EOF' > app/src/main/res/xml/file_paths.xml
           <?xml version="1.0" encoding="utf-8"?>
-          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+          <paths>
               <files-path name="vault_photos" path="vault_photos/" />
               <files-path name="all_files" path="." />
           </paths>
           EOF
 
-          # 6. শাপলা অ্যাপ আইকন ব্যাকগ্রাউন্ড (Deep Green)
+          # 6. শাপলা অ্যাপ আইকন ব্যাকগ্রাউন্ড
           cat << 'EOF' > app/src/main/res/drawable/ic_shapla_background.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -147,13 +147,11 @@ jobs:
               android:height="108dp"
               android:viewportWidth="108"
               android:viewportHeight="108">
-              <path
-                  android:fillColor="#0B4636"
-                  android:pathData="M0,0h108v108h-108z" />
+              <path android:fillColor="#0B4636" android:pathData="M0,0h108v108h-108z" />
           </vector>
           EOF
 
-          # 7. শাপলা অ্যাপ আইকন ফোরগ্রাউন্ড (White Lotus Flower)
+          # 7. শাপলা অ্যাপ আইকন ফোরগ্রাউন্ড (সাদা শাপলা ফুল)
           cat << 'EOF' > app/src/main/res/drawable/ic_shapla_foreground.xml
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -161,32 +159,14 @@ jobs:
               android:height="108dp"
               android:viewportWidth="108"
               android:viewportHeight="108">
-              <group
-                  android:scaleX="0.65"
-                  android:scaleY="0.65"
-                  android:translateX="18.9"
-                  android:translateY="18.9">
-                  <path
-                      android:fillColor="#FFFFFF"
-                      android:pathData="M54,20 C51,32 44,48 54,68 C64,48 57,32 54,20 Z" />
-                  <path
-                      android:fillColor="#FFFFFF"
-                      android:pathData="M51,26 C43,36 33,52 46,67 C48,54 50,38 51,26 Z" />
-                  <path
-                      android:fillColor="#FFFFFF"
-                      android:pathData="M57,26 C65,36 75,52 62,67 C60,54 58,38 57,26 Z" />
-                  <path
-                      android:fillColor="#FFFFFF"
-                      android:pathData="M44,36 C32,46 22,60 38,71 C41,58 43,46 44,36 Z" />
-                  <path
-                      android:fillColor="#FFFFFF"
-                      android:pathData="M64,36 C76,46 86,60 70,71 C67,58 65,46 64,36 Z" />
-                  <path
-                      android:fillColor="#10B981"
-                      android:pathData="M24,72 C40,78 68,78 84,72 C78,76 66,80 54,80 C42,80 30,76 24,72 Z" />
-                  <path
-                      android:fillColor="#0F766E"
-                      android:pathData="M34,79 C46,84 62,84 74,79 C68,82 60,84 54,84 C48,84 40,82 34,79 Z" />
+              <group android:scaleX="0.65" android:scaleY="0.65" android:translateX="18.9" android:translateY="18.9">
+                  <path android:fillColor="#FFFFFF" android:pathData="M54,20 C51,32 44,48 54,68 C64,48 57,32 54,20 Z" />
+                  <path android:fillColor="#FFFFFF" android:pathData="M51,26 C43,36 33,52 46,67 C48,54 50,38 51,26 Z" />
+                  <path android:fillColor="#FFFFFF" android:pathData="M57,26 C65,36 75,52 62,67 C60,54 58,38 57,26 Z" />
+                  <path android:fillColor="#FFFFFF" android:pathData="M44,36 C32,46 22,60 38,71 C41,58 43,46 44,36 Z" />
+                  <path android:fillColor="#FFFFFF" android:pathData="M64,36 C76,46 86,60 70,71 C67,58 65,46 64,36 Z" />
+                  <path android:fillColor="#10B981" android:pathData="M24,72 C40,78 68,78 84,72 C78,76 66,80 54,80 C42,80 30,76 24,72 Z" />
+                  <path android:fillColor="#0F766E" android:pathData="M34,79 C46,84 62,84 74,79 C68,82 60,84 54,84 C48,84 40,82 34,79 Z" />
               </group>
           </vector>
           EOF
@@ -208,7 +188,7 @@ jobs:
           </adaptive-icon>
           EOF
 
-          # 9. AndroidManifest.xml (শতভাগ নিখুঁত ও সম্পূর্ণ)
+          # 9. AndroidManifest.xml (শতভাগ নিখুঁত ও বন্ধনী সহ)
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -247,7 +227,7 @@ jobs:
           </manifest>
           EOF
 
-          # 10. MainActivity.kt (সম্পূর্ণ অ্যাপ্লিকেশন কোড)
+          # 10. MainActivity.kt (সম্পূর্ণ কোড)
           cat << 'EOF' > app/src/main/java/com/shapla/app/MainActivity.kt
           package com.shapla.app
 
@@ -276,7 +256,6 @@ jobs:
           import androidx.compose.foundation.background
           import androidx.compose.foundation.border
           import androidx.compose.foundation.clickable
-          import androidx.compose.foundation.gestures.detectTransformGestures
           import androidx.compose.foundation.layout.*
           import androidx.compose.foundation.lazy.LazyColumn
           import androidx.compose.foundation.lazy.LazyRow
@@ -294,10 +273,9 @@ jobs:
           import androidx.compose.ui.draw.clip
           import androidx.compose.ui.graphics.Color
           import androidx.compose.ui.graphics.asImageBitmap
-          import androidx.compose.ui.graphics.graphicsLayer
-          import androidx.compose.ui.input.pointer.pointerInput
           import androidx.compose.ui.layout.ContentScale
           import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.res.painterResource
           import androidx.compose.ui.text.font.FontWeight
           import androidx.compose.ui.text.input.PasswordVisualTransformation
           import androidx.compose.ui.unit.dp
@@ -330,23 +308,23 @@ jobs:
                       toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
                       handler.postDelayed({ toneGen?.startTone(ToneGenerator.TONE_PROP_BEEP, 100) }, 130)
                       handler.postDelayed({ toneGen?.startTone(ToneGenerator.TONE_PROP_ACK, 140) }, 260)
-                      val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+                      val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
                       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                          vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 80, 80, 80, 80, 100), -1))
-                      } else { vibrator?.vibrate(200) }
+                          v?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 80, 80, 80, 80, 100), -1))
+                      } else { v?.vibrate(200) }
                   } catch (e: Exception) { e.printStackTrace() }
               }
 
-              fun start40sCallRingtone(context: Context, onFinish: () -> Unit) {
-                  stopCallRingtone(context)
+              fun start40sCall(context: Context, onFinish: () -> Unit) {
+                  stopCall(context)
                   isCallRinging = true
-                  val callToneGen = try { ToneGenerator(AudioManager.STREAM_VOICE_CALL, 100) } catch (e: Exception) { toneGen }
+                  val callGen = try { ToneGenerator(AudioManager.STREAM_VOICE_CALL, 100) } catch (e: Exception) { toneGen }
 
                   val runnable = object : Runnable {
                       override fun run() {
                           if (isCallRinging) {
-                              callToneGen?.startTone(ToneGenerator.TONE_PROP_BEEP2, 220)
-                              handler.postDelayed({ if (isCallRinging) callToneGen?.startTone(ToneGenerator.TONE_PROP_BEEP2, 220) }, 250)
+                              callGen?.startTone(ToneGenerator.TONE_PROP_BEEP2, 220)
+                              handler.postDelayed({ if (isCallRinging) callGen?.startTone(ToneGenerator.TONE_PROP_BEEP2, 220) }, 250)
                               handler.postDelayed(this, 1200)
                           }
                       }
@@ -355,11 +333,11 @@ jobs:
 
                   callTimer = object : CountDownTimer(40000, 1000) {
                       override fun onTick(m: Long) {}
-                      override fun onFinish() { stopCallRingtone(context); onFinish() }
+                      override fun onFinish() { stopCall(context); onFinish() }
                   }.start()
               }
 
-              fun stopCallRingtone(context: Context? = null) {
+              fun stopCall(context: Context? = null) {
                   isCallRinging = false
                   callTimer?.cancel()
                   callTimer = null
@@ -373,42 +351,29 @@ jobs:
                   return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
               }
 
-              fun flip(src: Bitmap, horizontal: Boolean): Bitmap {
-                  val m = Matrix().apply { postScale(if (horizontal) -1f else 1f, if (horizontal) 1f else -1f) }
-                  return Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
+              fun cropSquare(src: Bitmap): Bitmap {
+                  val s = minOf(src.width, src.height)
+                  return Bitmap.createBitmap(src, (src.width - s) / 2, (src.height - s) / 2, s, s)
               }
 
-              fun cropAspect(src: Bitmap, aspectX: Int, aspectY: Int): Bitmap {
-                  val targetRatio = aspectX.toFloat() / aspectY.toFloat()
-                  val srcRatio = src.width.toFloat() / src.height.toFloat()
-                  var w = src.width
-                  var h = src.height
-                  if (srcRatio > targetRatio) { w = (h * targetRatio).toInt() } else { h = (w / targetRatio).toInt() }
-                  val x = (src.width - w) / 2
-                  val y = (src.height - h) / 2
-                  return Bitmap.createBitmap(src, x, y, w, h)
-              }
-
-              fun applyFilter(src: Bitmap, filterType: String): Bitmap {
+              fun applyFilter(src: Bitmap, type: String): Bitmap {
                   val out = Bitmap.createBitmap(src.width, src.height, src.config ?: Bitmap.Config.ARGB_8888)
                   val canvas = Canvas(out)
                   val paint = Paint()
                   val cm = ColorMatrix()
-
-                  when (filterType) {
+                  when (type) {
                       "grayscale" -> cm.setSaturation(0f)
                       "sepia" -> {
                           cm.setScale(1f, 0.95f, 0.82f, 1f)
-                          val sepiaMatrix = ColorMatrix(floatArrayOf(
+                          val sep = ColorMatrix(floatArrayOf(
                               0.393f, 0.769f, 0.189f, 0f, 0f,
                               0.349f, 0.686f, 0.168f, 0f, 0f,
                               0.272f, 0.534f, 0.131f, 0f, 0f,
                               0f, 0f, 0f, 1f, 0f
                           ))
-                          cm.postConcat(sepiaMatrix)
+                          cm.postConcat(sep)
                       }
                       "warm" -> cm.setScale(1.2f, 1.0f, 0.8f, 1f)
-                      "cool" -> cm.setScale(0.8f, 1.0f, 1.2f, 1f)
                   }
                   paint.colorFilter = ColorMatrixColorFilter(cm)
                   canvas.drawBitmap(src, 0f, 0f, paint)
@@ -432,11 +397,11 @@ jobs:
           fun shareImageFile(context: Context, filePath: String) {
               try {
                   val file = File(filePath)
-                  if (!file.exists()) { Toast.makeText(context, "ফাইলটি খুঁজে পাওয়া যায়নি!", Toast.LENGTH_SHORT).show(); return }
-                  val contentUri = FileProvider.getUriForFile(context, "com.shapla.app.fileprovider", file)
+                  if (!file.exists()) { Toast.makeText(context, "ফাইল নেই!", Toast.LENGTH_SHORT).show(); return }
+                  val uri = FileProvider.getUriForFile(context, "com.shapla.app.fileprovider", file)
                   val intent = Intent(Intent.ACTION_SEND).apply {
                       type = "image/jpeg"
-                      putExtra(Intent.EXTRA_STREAM, contentUri)
+                      putExtra(Intent.EXTRA_STREAM, uri)
                       addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                   }
                   context.startActivity(Intent.createChooser(intent, "Shapla — শেয়ার করুন"))
@@ -476,7 +441,6 @@ jobs:
                               )
                               "main" -> MainAppHub(
                                   userName = loggedInUser,
-                                  userPrefs = prefs,
                                   onLogout = { loggedInUser = ""; currentScreen = "login" }
                               )
                           }
@@ -486,58 +450,35 @@ jobs:
 
               override fun onDestroy() {
                   super.onDestroy()
-                  ShaplaSoundEngine.stopCallRingtone(this)
+                  ShaplaSoundEngine.stopCall(this)
               }
           }
 
           @Composable
           fun BrandedSplashScreen() {
               Box(
-                  modifier = Modifier
-                      .fillMaxSize()
-                      .background(Color.White),
+                  modifier = Modifier.fillMaxSize().background(Color.White),
                   contentAlignment = Alignment.Center
               ) {
                   Column(horizontalAlignment = Alignment.CenterHorizontally) {
                       Box(
-                          modifier = Modifier
-                              .size(105.dp)
-                              .clip(RoundedCornerShape(22.dp))
-                              .background(ShaplaDeepGreen),
+                          modifier = Modifier.size(110.dp).clip(RoundedCornerShape(24.dp)).background(ShaplaDeepGreen),
                           contentAlignment = Alignment.Center
                       ) {
                           Icon(
-                              imageVector = Icons.Default.Star,
+                              painter = painterResource(id = R.drawable.ic_shapla_foreground),
                               contentDescription = "Shapla Logo",
-                              tint = Color.White,
-                              modifier = Modifier.size(60.dp)
+                              tint = Color.Unspecified,
+                              modifier = Modifier.size(90.dp)
                           )
                       }
                       Spacer(modifier = Modifier.height(18.dp))
-                      Text(
-                          text = "Shapla",
-                          fontSize = 32.sp,
-                          fontWeight = FontWeight.ExtraBold,
-                          color = ShaplaDeepGreen
-                      )
-                      Text(
-                          text = "শাপলা",
-                          fontSize = 18.sp,
-                          fontWeight = FontWeight.SemiBold,
-                          color = ShaplaLeafGreen
-                      )
+                      Text(text = "Shapla", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = ShaplaDeepGreen)
+                      Text(text = "শাপলা", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = ShaplaLeafGreen)
                       Spacer(modifier = Modifier.height(6.dp))
-                      Text(
-                          text = "কাজ, সেবা, সব একসাথে।",
-                          fontSize = 14.sp,
-                          color = Color.DarkGray
-                      )
+                      Text(text = "কাজ, সেবা, সব একসাথে।", fontSize = 14.sp, color = Color.DarkGray)
                       Spacer(modifier = Modifier.height(28.dp))
-                      Text(
-                          text = "Designed & Owned by Mohammad Israfil Hossain",
-                          fontSize = 11.sp,
-                          color = Color.Gray
-                      )
+                      Text(text = "Designed & Owned by Mohammad Israfil Hossain", fontSize = 11.sp, color = Color.Gray)
                   }
               }
           }
@@ -615,14 +556,14 @@ jobs:
           }
 
           @Composable
-          fun MainAppHub(userName: String, userPrefs: android.content.SharedPreferences, onLogout: () -> Unit) {
+          fun MainAppHub(userName: String, onLogout: () -> Unit) {
               val context = LocalContext.current
               var activeTab by remember { mutableStateOf("home") }
               var lastBackPressTime by remember { mutableStateOf(0L) }
 
               var previewImageFile by remember { mutableStateOf<String?>(null) }
               var editingImageFile by remember { mutableStateOf<String?>(null) }
-              var isIncomingCallActive by remember { mutableStateOf(false) }
+              var isCallActive by remember { mutableStateOf(false) }
 
               BackHandler(enabled = true) {
                   when {
@@ -661,11 +602,10 @@ jobs:
                       when (activeTab) {
                           "home" -> HomeScreen(
                               userName = userName,
-                              onTriggerCall = {
-                                  isIncomingCallActive = true
-                                  ShaplaSoundEngine.start40sCallRingtone(context) { isIncomingCallActive = false }
-                              },
-                              onPreview = { previewImageFile = it }
+                              onCallTest = {
+                                  isCallActive = true
+                                  ShaplaSoundEngine.start40sCall(context) { isCallActive = false }
+                              }
                           )
                           "vault" -> AdvancedVaultScreen(
                               userName = userName,
@@ -692,17 +632,17 @@ jobs:
                                   val newFile = saveBitmapToFile(context, editedBmp, "edited_${System.currentTimeMillis()}.jpg")
                                   editingImageFile = null
                                   previewImageFile = newFile.absolutePath
-                                  Toast.makeText(context, "এডিটেড ছবি সফলভাবে সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
+                                  Toast.makeText(context, "এডিটেড ছবি সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
                               }
                           )
                       }
 
-                      if (isIncomingCallActive) {
+                      if (isCallActive) {
                           CallOverlay(
                               caller = "করিম (কাজের ক্লায়েন্ট)",
                               onEnd = {
-                                  ShaplaSoundEngine.stopCallRingtone(context)
-                                  isIncomingCallActive = false
+                                  ShaplaSoundEngine.stopCall(context)
+                                  isCallActive = false
                               }
                           )
                       }
@@ -748,4 +688,358 @@ jobs:
               val currentFolder = folders.find { it.id == currentFolderId }
 
               Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
-                  Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArr
+                  Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                      Row(verticalAlignment = Alignment.CenterVertically) {
+                          if (currentFolderId != null || isTrashView) {
+                              IconButton(onClick = { if (isTrashView) isTrashView = false else currentFolderId = null }) {
+                                  Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = ShaplaDeepGreen)
+                              }
+                          }
+                          Text(
+                              text = if (isTrashView) "রিসাইকেল বিন (Trash)" else (currentFolder?.name ?: "Secure Vault"),
+                              fontWeight = FontWeight.Bold,
+                              fontSize = 18.sp,
+                              color = ShaplaDeepGreen
+                          )
+                      }
+
+                      Row {
+                          IconButton(onClick = { isTrashView = !isTrashView }) {
+                              Icon(Icons.Default.Delete, contentDescription = "Trash", tint = if (isTrashView) Color.Red else Color.Gray)
+                          }
+                      }
+                  }
+
+                  if (!isTrashView) {
+                      Surface(color = Color.White, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                          Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                              Text("Vault", color = ShaplaDeepGreen, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { currentFolderId = null })
+                              if (currentFolder != null) {
+                                  Text("  ›  ", color = Color.Gray)
+                                  Text(currentFolder.name, color = Color.DarkGray, fontWeight = FontWeight.SemiBold)
+                              }
+                          }
+                      }
+
+                      Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.End) {
+                          OutlinedButton(onClick = { showNewFolderDialog = true }, modifier = Modifier.padding(end = 8.dp)) {
+                              Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                              Spacer(modifier = Modifier.width(4.dp))
+                              Text("ফোল্ডার", fontSize = 12.sp)
+                          }
+                          Button(onClick = { showNewFileDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = ShaplaDeepGreen)) {
+                              Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                              Spacer(modifier = Modifier.width(4.dp))
+                              Text("ফাইল/নথি", fontSize = 12.sp)
+                          }
+                      }
+                  }
+
+                  LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      if (!isTrashView) {
+                          val visibleFolders = folders.filter { it.parentId == currentFolderId && !it.isTrash }
+                          items(visibleFolders) { f ->
+                              Card(modifier = Modifier.fillMaxWidth().clickable { currentFolderId = f.id }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                  Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                      Icon(Icons.Default.Star, null, tint = ShaplaAmber, modifier = Modifier.size(28.dp))
+                                      Spacer(modifier = Modifier.width(12.dp))
+                                      Text(f.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                      IconButton(onClick = {
+                                          val idx = folders.indexOf(f)
+                                          if (idx != -1) folders[idx] = f.copy(isTrash = true)
+                                          Toast.makeText(context, "ফোল্ডার ট্র্যাশে পাঠানো হয়েছে", Toast.LENGTH_SHORT).show()
+                                      }) { Icon(Icons.Default.Delete, null, tint = Color.LightGray, modifier = Modifier.size(18.dp)) }
+                                  }
+                              }
+                          }
+
+                          val visibleFiles = files.filter { it.folderId == currentFolderId && !it.isTrash }
+                          items(visibleFiles) { fileItem ->
+                              Card(modifier = Modifier.fillMaxWidth().clickable { onPreview(fileItem.imagePath) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                  Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                      Icon(Icons.Default.Lock, null, tint = ShaplaLeafGreen, modifier = Modifier.size(26.dp))
+                                      Spacer(modifier = Modifier.width(10.dp))
+                                      Column(modifier = Modifier.weight(1f)) {
+                                          Text(fileItem.title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                          Text("নম্বর: ${fileItem.idNumber}", fontSize = 12.sp, color = Color.Gray)
+                                      }
+                                      IconButton(onClick = { onEditPhoto(fileItem.imagePath) }) { Icon(Icons.Default.Edit, "Edit", tint = ShaplaDeepGreen) }
+                                      IconButton(onClick = { shareImageFile(context, fileItem.imagePath) }) { Icon(Icons.Default.Share, "Share", tint = Color.DarkGray) }
+                                      IconButton(onClick = {
+                                          val idx = files.indexOf(fileItem)
+                                          if (idx != -1) files[idx] = fileItem.copy(isTrash = true)
+                                          Toast.makeText(context, "নথি ট্র্যাশে পাঠানো হয়েছে", Toast.LENGTH_SHORT).show()
+                                      }) { Icon(Icons.Default.Delete, null, tint = Color.Red.copy(alpha = 0.6f)) }
+                                  }
+                              }
+                          }
+                      } else {
+                          item {
+                              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                  Text("ট্র্যাশের আইটেমসমূহ", fontWeight = FontWeight.Bold, color = Color.Red)
+                                  TextButton(onClick = {
+                                      folders.removeAll { it.isTrash }
+                                      files.removeAll { it.isTrash }
+                                      Toast.makeText(context, "ট্র্যাশ পরিষ্কার করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                                  }) { Text("Empty Trash", color = Color.Red) }
+                              }
+                          }
+
+                          val trashedFiles = files.filter { it.isTrash }
+                          items(trashedFiles) { tf ->
+                              Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))) {
+                                  Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                      Text(tf.title, modifier = Modifier.weight(1f))
+                                      Button(
+                                          onClick = {
+                                              val idx = files.indexOf(tf)
+                                              if (idx != -1) files[idx] = tf.copy(isTrash = false)
+                                              Toast.makeText(context, "পুনরুদ্ধার সম্পন্ন!", Toast.LENGTH_SHORT).show()
+                                          },
+                                          colors = ButtonDefaults.buttonColors(containerColor = ShaplaDeepGreen)
+                                      ) { Text("Restore") }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+
+              if (showNewFolderDialog) {
+                  var folderName by remember { mutableStateOf("") }
+                  AlertDialog(
+                      onDismissRequest = { showNewFolderDialog = false },
+                      title = { Text("নতুন ফোল্ডার") },
+                      text = { OutlinedTextField(value = folderName, onValueChange = { folderName = it }, label = { Text("ফোল্ডারের নাম") }) },
+                      confirmButton = {
+                          Button(onClick = {
+                              if (folderName.isNotBlank()) {
+                                  folders.add(VaultFolder(UUID.randomUUID().toString(), folderName, currentFolderId))
+                                  showNewFolderDialog = false
+                              }
+                          }) { Text("তৈরি করুন") }
+                      },
+                      dismissButton = { TextButton(onClick = { showNewFolderDialog = false }) { Text("বাতিল") } }
+                  )
+              }
+
+              if (showNewFileDialog) {
+                  var title by remember { mutableStateOf("") }
+                  var num by remember { mutableStateOf("") }
+                  var selBmp by remember { mutableStateOf<Bitmap?>(null) }
+
+                  val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+                      if (uri != null) {
+                          context.contentResolver.openInputStream(uri)?.use { selBmp = BitmapFactory.decodeStream(it) }
+                      }
+                  }
+
+                  Dialog(onDismissRequest = { showNewFileDialog = false }) {
+                      Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+                          Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                              Text("নতুন নথি যুক্ত করুন", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = ShaplaDeepGreen)
+                              OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text("নথির নাম") }, modifier = Modifier.fillMaxWidth())
+                              OutlinedTextField(value = num, onValueChange = { num = it }, label = { Text("আইডি/নম্বর") }, modifier = Modifier.fillMaxWidth())
+
+                              if (selBmp != null) {
+                                  Image(bitmap = selBmp!!.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+                              } else {
+                                  Button(onClick = { picker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) { Text("গ্যালারি থেকে ছবি নিন") }
+                              }
+
+                              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                  OutlinedButton(onClick = { showNewFileDialog = false }, modifier = Modifier.weight(1f)) { Text("বাতিল") }
+                                  Button(
+                                      onClick = {
+                                          if (title.isNotBlank() && selBmp != null) {
+                                              val file = saveBitmapToFile(context, selBmp!, "file_${System.currentTimeMillis()}.jpg")
+                                              files.add(VaultFile(UUID.randomUUID().toString(), currentFolderId, title, num, file.absolutePath))
+                                              showNewFileDialog = false
+                                          }
+                                      },
+                                      modifier = Modifier.weight(1f),
+                                      colors = ButtonDefaults.buttonColors(containerColor = ShaplaDeepGreen)
+                                  ) { Text("সেভ করুন") }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun CompleteImageEditorDialog(inputFilePath: String, onClose: () -> Unit, onSaveEdited: (Bitmap) -> Unit) {
+              val originalBmp = remember(inputFilePath) { BitmapFactory.decodeFile(inputFilePath) }
+              var currentBmp by remember { mutableStateOf(originalBmp) }
+              var activeFilter by remember { mutableStateOf("original") }
+
+              Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+                  Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
+                      Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
+                          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                              IconButton(onClick = onClose) { Icon(Icons.Default.Close, null, tint = Color.White) }
+                              Text("ফটো এডিটর", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                              Button(
+                                  onClick = { currentBmp?.let { onSaveEdited(it) } },
+                                  colors = ButtonDefaults.buttonColors(containerColor = ShaplaLeafGreen)
+                              ) { Text("Save") }
+                          }
+
+                          Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                              if (currentBmp != null) {
+                                  Image(bitmap = currentBmp!!.asImageBitmap(), contentDescription = "Editor Target", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                              }
+                          }
+
+                          Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF1E293B), RoundedCornerShape(12.dp)).padding(10.dp)) {
+                              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                                  IconButton(onClick = { currentBmp?.let { currentBmp = ImageEditUtils.rotate(it, 90f) } }) {
+                                      Icon(Icons.Default.Refresh, "Rotate", tint = Color.White)
+                                  }
+                                  TextButton(onClick = { currentBmp?.let { currentBmp = ImageEditUtils.cropSquare(it) } }) {
+                                      Text("1:1 Crop", color = Color.White, fontWeight = FontWeight.Bold)
+                                  }
+                              }
+
+                              LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                                  val filters = listOf("original" to "Normal", "grayscale" to "B&W", "sepia" to "Sepia", "warm" to "Warm")
+                                  items(filters) { (key, label) ->
+                                      Button(
+                                          onClick = {
+                                              activeFilter = key
+                                              originalBmp?.let { currentBmp = if (key == "original") it else ImageEditUtils.applyFilter(it, key) }
+                                          },
+                                          colors = ButtonDefaults.buttonColors(containerColor = if (activeFilter == key) ShaplaLeafGreen else Color.DarkGray)
+                                      ) { Text(label, fontSize = 11.sp) }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun ZoomableImagePreview(filePath: String, onClose: () -> Unit, onShare: () -> Unit) {
+              val bmp = remember(filePath) { BitmapFactory.decodeFile(filePath) }
+              Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+                  Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+                      if (bmp != null) {
+                          Image(
+                              bitmap = bmp.asImageBitmap(),
+                              contentDescription = "Preview",
+                              modifier = Modifier.fillMaxSize(),
+                              contentScale = ContentScale.Fit
+                          )
+                      }
+                      Row(
+                          modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(14.dp),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          IconButton(onClick = onClose) { Icon(Icons.Default.Close, null, tint = Color.White) }
+                          IconButton(onClick = onShare) { Icon(Icons.Default.Share, null, tint = Color.White) }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun HomeScreen(userName: String, onCallTest: () -> Unit) {
+              val context = LocalContext.current
+              val posts = remember {
+                  mutableStateListOf(
+                      PostItem("1", "Mohammad Israfil Hossain", "৫ মিনিট আগে", "শাপলা (Shapla) অ্যাপে সবাইকে স্বাগতম! কাজ, সেবা ও মানুষের যোগাযোগ—সব একসাথে।"),
+                      PostItem("2", "আরিফুল ইসলাম", "১ ঘণ্টা আগে", "ঢাকা উত্তরা ও মিরপুরে ইলেকট্রিক সার্ভিসিং কাজের জন্য যোগাযোগ করুন।")
+                  )
+              }
+
+              LazyColumn(modifier = Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                  item {
+                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                          Text("Shapla Feed", fontWeight = FontWeight.ExtraBold, fontSize = 20.sp, color = ShaplaDeepGreen)
+                          Row {
+                              IconButton(onClick = onCallTest) { Icon(Icons.Default.Phone, null, tint = ShaplaAmber) }
+                              IconButton(onClick = { ShaplaSoundEngine.playTriplePing(context) }) { Icon(Icons.Default.Notifications, null, tint = ShaplaDeepGreen) }
+                          }
+                      }
+                  }
+
+                  items(posts) { p ->
+                      Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
+                          Column(modifier = Modifier.padding(14.dp)) {
+                              Text(p.authorName, fontWeight = FontWeight.Bold, color = ShaplaDeepGreen)
+                              Text(p.timeAgo, fontSize = 11.sp, color = Color.Gray)
+                              Spacer(modifier = Modifier.height(6.dp))
+                              Text(p.content)
+                              Spacer(modifier = Modifier.height(10.dp))
+                              Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                  Row(modifier = Modifier.clickable {
+                                      p.isLiked = !p.isLiked
+                                      p.likes += if (p.isLiked) 1 else -1
+                                      if (p.isLiked) ShaplaSoundEngine.playTriplePing(context)
+                                  }) {
+                                      Icon(Icons.Default.ThumbUp, null, tint = if (p.isLiked) ShaplaLeafGreen else Color.Gray, modifier = Modifier.size(16.dp))
+                                      Spacer(modifier = Modifier.width(4.dp))
+                                      Text("${p.likes}", fontSize = 12.sp)
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun JobScreen() {
+              Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                  Text("কাজ ও সেবা (Job & Work)", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = ShaplaDeepGreen)
+                  Spacer(modifier = Modifier.height(10.dp))
+                  Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
+                      Column(modifier = Modifier.padding(14.dp)) {
+                          Text("বাসার এসি সার্ভিসিং", fontWeight = FontWeight.Bold)
+                          Text("মিরপুর-১০, ঢাকা • বাজেট: ১,৫০০ ৳", color = ShaplaLeafGreen, fontSize = 12.sp)
+                      }
+                  }
+              }
+          }
+
+          @Composable
+          fun SettingsScreen(userName: String, onLogout: () -> Unit) {
+              Column(modifier = Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                  Text("সেটিংস", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = ShaplaDeepGreen)
+                  Text("লগইন আইডি: $userName", color = Color.DarkGray)
+                  Text("Designed & Owned by Mohammad Israfil Hossain", fontSize = 11.sp, color = Color.Gray)
+                  Spacer(modifier = Modifier.height(20.dp))
+                  Button(onClick = onLogout, colors = ButtonDefaults.buttonColors(containerColor = Color.Red)) { Text("লগআউট") }
+              }
+          }
+
+          @Composable
+          fun CallOverlay(caller: String, onEnd: () -> Unit) {
+              Dialog(onDismissRequest = onEnd) {
+                  Box(modifier = Modifier.fillMaxSize().background(Color(0xFF071B16)), contentAlignment = Alignment.Center) {
+                      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                          Text("ইনকামিং কল...", color = ShaplaLeafGreen, fontSize = 16.sp)
+                          Spacer(modifier = Modifier.height(14.dp))
+                          Text(caller, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                          Text("পিং-পিং রিং বাজছে... (৪০ সেকেন্ড)", color = Color.LightGray, fontSize = 12.sp)
+                          Spacer(modifier = Modifier.height(40.dp))
+                          FloatingActionButton(onClick = onEnd, containerColor = Color.Red, shape = CircleShape) {
+                              Icon(Icons.Default.Close, null, tint = Color.White)
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+      - name: Build Debug APK
+        run: gradle assembleDebug --stacktrace --no-daemon
+
+      - name: Upload Shapla APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shapla-App-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
